@@ -35,8 +35,8 @@ export const GISCUS = {
  * 任一项为空 = 不注入统计脚本。
  */
 export const UMAMI = {
-  src: '', // 例如 'https://cloud.umami.is/script.js'
-  websiteId: '', // umami 后台添加网站后生成
+  src: 'https://cloud.umami.is/script.js',
+  websiteId: 'd4f8ec00-2b50-444a-b6df-b3f5b4430ef2', // umami 后台添加网站后生成
 };
 
 /**
