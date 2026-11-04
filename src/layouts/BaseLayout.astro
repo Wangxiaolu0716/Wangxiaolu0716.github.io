@@ -1,0 +1,684 @@
+---
+import { ClientRouter } from 'astro:transitions';
+import { SITE, UMAMI, ANALYTICS } from '../config';
+import { BASE, withBase } from '../utils/posts';
+import '../styles/global.css';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import Curtain from '../components/Curtain.astro';
+import SearchModal from '../components/SearchModal.astro';
+
+interface Props {
+  title?: string;
+  description?: string;
+  /** 每篇文章可传入专属 OG 分享图(完整 URL) */
+  ogImage?: string;
+  /** 阅读模式:顶栏显示文章标题(文章页传入) */
+  headerTitle?: string;
+  /** 文章发布时间(SEO/OG 扩展,文章页传入) */
+  publishedTime?: Date;
+  /** 文章修改时间 */
+  modifiedTime?: Date;
+  /** 文章标签 */
+  tags?: string[];
+  /** 结构化数据 JSON-LD(SEO/GEO) */
+  jsonLd?: Record<string, unknown>[];
+}
+
+const {
+  title,
+  description = SITE.description,
+  ogImage: ogImageOverride,
+  headerTitle,
+  publishedTime,
+  modifiedTime,
+  tags,
+  jsonLd,
+} = Astro.props;
+const fullTitle = title ? `${title} · ${SITE.title}` : SITE.title;
+const ogImage =
+  ogImageOverride ?? new URL(`${BASE}og.png`, SITE.url).href;
+const canonical = new URL(Astro.url.pathname, SITE.url).href;
+---
+
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="generator" content={Astro.generator} />
+    <title>{fullTitle}</title>
+    <meta name="description" content={description} />
+    <meta name="author" content={SITE.author} />
+    <link rel="canonical" href={canonical} />
+    <meta property="og:type" content={publishedTime ? 'article' : 'website'} />
+    <meta property="og:site_name" content={SITE.title} />
+    <meta property="og:locale" content="zh_CN" />
+    <meta property="og:title" content={fullTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:url" content={canonical} />
+    <meta name="twitter:card" content="summary_large_image" />
+    {
+      publishedTime && (
+        <meta property="article:published_time" content={publishedTime.toISOString()} />
+      )
+    }
+    {
+      modifiedTime && (
+        <meta property="article:modified_time" content={modifiedTime.toISOString()} />
+      )
+    }
+    {
+      tags &&
+        tags.length > 0 &&
+        tags.map((tag) => <meta property="article:tag" content={tag} />)
+    }
+    {
+      jsonLd &&
+        jsonLd.map((data) => (
+          <script
+            type="application/ld+json"
+            set:html={JSON.stringify(data).replace(/</g, '\\u003c')}
+          />
+        ))
+    }
+    <link rel="icon" type="image/svg+xml" href={withBase('/favicon.svg')} />
+    <link
+      rel="alternate"
+      type="application/rss+xml"
+      title={SITE.title}
+      href={withBase('/feed.xml')}
+    />
+    <link rel="sitemap" href={withBase('/sitemap-index.xml')} />
+    {
+      UMAMI.src && UMAMI.websiteId && (
+        <script is:inline defer src={UMAMI.src} data-website-id={UMAMI.websiteId} />
+      )
+    }
+    {
+      ANALYTICS.cloudflareToken && (
+        <script
+          is:inline
+          defer
+          src="https://static.cloudflareinsights.com/beacon.min.js"
+          data-cf-beacon={JSON.stringify({ token: ANALYTICS.cloudflareToken })}
+        />
+      )
+    }
+    <script is:inline data-astro-rerun>
+      // 主题无闪烁初始化:data-astro-rerun 保证每次页面切换后重新执行,
+      // 否则 View Transitions 换页时 <html> 的属性会被服务端渲染结果覆盖。
+      // 默认白色主题打底(Code Barcelona 的排版骨架 + 白底),右上角可切深墨紫。
+      // 存储键用 theme-v2:旧的 theme 键里可能存着历史偏好,换键让所有人回到新默认。
+      (() => {
+        const theme = localStorage.getItem('theme-v2') ?? 'light';
+        document.documentElement.dataset.theme = theme;
+        document.documentElement.classList.add('js');
+      })();
+    </script>
+    <ClientRouter />
+  </head>
+  <body class="flex min-h-screen flex-col bg-bg font-sans text-text antialiased">
+    <div class="atmosphere" aria-hidden="true">
+      <div class="stars"></div>
+    </div>
+    <Header headerTitle={headerTitle} />
+    <main class="flex-1">
+      <slot />
+    </main>
+    <Footer />
+    <Curtain />
+    <SearchModal />
+
+    <script>
+      // ============================================================
+      // 全站动效与交互引导脚本
+      // 模块脚本全站只执行一次;换页后通过 astro:page-load 重新初始化 DOM 相关逻辑。
+      // ============================================================
+      import { gsap } from 'gsap';
+
+      const reduceMotion = window.matchMedia(
+        '(prefers-reduced-motion: reduce)',
+      ).matches;
+      const finePointer = window.matchMedia(
+        '(hover: hover) and (pointer: fine)',
+      ).matches;
+
+      /* ---------------- 标签页切换彩蛋 ---------------- */
+      const originalTitle = document.title;
+      let titleTimer: ReturnType<typeof setTimeout> | undefined;
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+          document.title = '(´･_･`) 去哪了…';
+        } else {
+          document.title = '(◕‿◕) 欢迎回来!';
+          clearTimeout(titleTimer);
+          titleTimer = setTimeout(() => {
+            document.title = originalTitle;
+          }, 1600);
+        }
+      });
+
+      /* ---------------- 跑马灯滚动变速 ---------------- */
+      let marqueeAnims: Animation[] = [];
+      let lastScrollY = window.scrollY;
+      let marqueeRate = 1;
+      gsap.ticker.add(() => {
+        if (!marqueeAnims.length) return;
+        const y = window.scrollY;
+        const v = y - lastScrollY;
+        lastScrollY = y;
+        const target = Math.min(5, Math.max(1, 1 + Math.abs(v) * 0.06));
+        marqueeRate += (target - marqueeRate) * 0.08;
+        if (Math.abs(marqueeRate - 1) < 0.01) marqueeRate = 1;
+        for (const anim of marqueeAnims) {
+          try {
+            anim.playbackRate = marqueeRate;
+          } catch {
+            /* 个别动画不支持 playbackRate,忽略 */
+          }
+        }
+      });
+
+      /* ---------------- 幕布转场 ----------------
+         原则:动画故障绝不能卡住导航 —— 所有阶段先用 killTweensOf 清场,
+         Router 的 loader 等待落幕时有 1.2s 超时兜底。 */
+      const curtain = document.getElementById('curtain');
+      const panels = curtain
+        ? [...curtain.querySelectorAll<HTMLElement>('.curtain-panel')]
+        : [];
+      const logo = curtain?.querySelector<HTMLElement>('.curtain-logo') ?? null;
+      const wait = (ms: number) =>
+        new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+      /** 落幕:帘片依次落下遮住屏幕 */
+      function curtainIn(): Promise<void> {
+        if (!curtain) return Promise.resolve();
+        curtain.classList.add('is-animating');
+        if (reduceMotion) return Promise.resolve();
+        gsap.killTweensOf([...panels, logo!]);
+        return gsap
+          .timeline()
+          .set(panels, { yPercent: -101 })
+          .to(panels, {
+            yPercent: 0,
+            duration: 0.42,
+            ease: 'power3.inOut',
+            stagger: 0.05,
+          })
+          .to(logo, { opacity: 1, duration: 0.22 }, '-=0.15')
+          .then();
+      }
+
+      /** 揭幕:logo 隐去,帘片继续向下穿出屏幕 */
+      function curtainOut(): void {
+        if (!curtain) return;
+        if (reduceMotion) {
+          curtain.classList.remove('is-animating');
+          return;
+        }
+        gsap.killTweensOf([...panels, logo!]);
+        gsap
+          .timeline({
+            onComplete: () => curtain.classList.remove('is-animating'),
+          })
+          .to(logo, { opacity: 0, duration: 0.16 })
+          .to(
+            panels,
+            {
+              yPercent: 101,
+              duration: 0.6,
+              ease: 'power4.inOut',
+              stagger: 0.05,
+            },
+            '<0.04',
+          );
+      }
+
+      // 转场纪律(强叔反馈迭代版):
+      // 1) 打开网站:不播幕布,只走独立入场动画(hero 逐段浮现)
+      // 2) 会话内第一次切页:幕布登场,只此一次
+      // 3) 之后的换页:归于平静(原生淡入)
+      const USED_KEY = 'curtain-used';
+      let booted = false; // 是否已走完首屏
+      let curtainPlaying = false; // 本次导航是否在播幕布
+
+      document.addEventListener('astro:before-preparation', (event) => {
+        const originalLoader = (event as any).loader as () => Promise<void>;
+        (event as any).loader = async () => {
+          if (!sessionStorage.getItem(USED_KEY) && !reduceMotion) {
+            sessionStorage.setItem(USED_KEY, '1');
+            curtainPlaying = true;
+            await Promise.race([curtainIn(), wait(1200)]);
+          }
+          await originalLoader.call(event);
+        };
+      });
+
+      /* ---------------- 每页初始化 ---------------- */
+      let progressHandler: (() => void) | null = null;
+
+      function syncGiscusTheme(): void {
+        const frame = document.querySelector<HTMLIFrameElement>(
+          'iframe.giscus-frame',
+        );
+        const theme =
+          document.documentElement.dataset.theme === 'dark'
+            ? 'transparent_dark'
+            : 'light';
+        frame?.contentWindow?.postMessage(
+          { giscus: { setConfig: { theme } } },
+          'https://giscus.app',
+        );
+      }
+
+      function initPage(heroStagger: boolean): void {
+        // 光标环(仅精确指针设备):跟随 + 悬停可交互元素时放大
+        if (finePointer && !reduceMotion) {
+          let ring = document.getElementById('cursor-ring');
+          if (!ring) {
+            ring = document.createElement('div');
+            ring.id = 'cursor-ring';
+            document.body.appendChild(ring);
+          }
+        }
+
+        // 磁性按钮:光标靠近时被轻轻吸住,离开弹回
+        if (finePointer && !reduceMotion) {
+          document
+            .querySelectorAll<HTMLElement>('.btn-primary, .btn-ghost')
+            .forEach((el) => {
+              if (el.dataset.magnetic) return;
+              el.dataset.magnetic = '1';
+              el.addEventListener('mousemove', (e) => {
+                const r = el.getBoundingClientRect();
+                gsap.to(el, {
+                  x: (e.clientX - r.left - r.width / 2) * 0.26,
+                  y: (e.clientY - r.top - r.height / 2) * 0.26,
+                  duration: 0.3,
+                  ease: 'power2.out',
+                });
+              });
+              el.addEventListener('mouseleave', () => {
+                gsap.to(el, {
+                  x: 0,
+                  y: 0,
+                  duration: 0.5,
+                  ease: 'elastic.out(1, 0.45)',
+                });
+              });
+            });
+        }
+
+        // 跑马灯动画列表(滚动变速用)
+        marqueeAnims = document
+          .getAnimations()
+          .filter((a) => a.animationName === 'marquee');
+
+        // Hero 逐段渐入:只在会话第一次进入时播放(强叔方案:首次惊艳,之后无感)
+        const hero = document.querySelector<HTMLElement>('[data-hero]');
+        if (hero && !reduceMotion && heroStagger) {
+          gsap.fromTo(
+            hero.children,
+            { opacity: 0, y: 36, filter: 'blur(8px)' },
+            {
+              opacity: 1,
+              y: 0,
+              filter: 'blur(0px)',
+              duration: 0.9,
+              ease: 'power3.out',
+              stagger: 0.09,
+              delay: 0.1,
+              clearProps: 'filter,transform',
+              overwrite: 'auto',
+            },
+          );
+        } else if (hero) {
+          gsap.set(hero.children, { opacity: 1, y: 0, filter: 'none' });
+        }
+
+        // 滚动浮现:进入视口的 [data-reveal] 元素依次上浮点亮
+        const revealEls = [
+          ...document.querySelectorAll<HTMLElement>('[data-reveal]'),
+        ];
+        if (revealEls.length && !reduceMotion) {
+          const io = new IntersectionObserver(
+            (entries) => {
+              for (const entry of entries) {
+                if (!entry.isIntersecting) continue;
+                gsap.to(entry.target, {
+                  opacity: 1,
+                  y: 0,
+                  duration: 0.8,
+                  ease: 'power3.out',
+                  clearProps: 'transform',
+                });
+                io.unobserve(entry.target);
+              }
+            },
+            { threshold: 0.12, rootMargin: '0px 0px -40px 0px' },
+          );
+          revealEls.forEach((el) => io.observe(el));
+        } else {
+          revealEls.forEach((el) => {
+            el.style.opacity = '1';
+            el.style.transform = 'none';
+          });
+        }
+
+        // 阅读进度条
+        const bar = document.getElementById('reading-progress');
+        if (bar) {
+          if (progressHandler) {
+            window.removeEventListener('scroll', progressHandler);
+          }
+          progressHandler = () => {
+            const el = document.documentElement;
+            const max = el.scrollHeight - el.clientHeight;
+            bar.style.transform = `scaleX(${max > 0 ? el.scrollTop / max : 0})`;
+          };
+          progressHandler();
+          window.addEventListener('scroll', progressHandler, {
+            passive: true,
+          });
+        }
+
+        // 阅读体验增强:复制按钮注入 + 目录滚动高亮
+        enhanceReading();
+
+        syncGiscusTheme();
+      }
+
+      /* ---------------- 自定义光标环(跟随 + 悬停放大) ---------------- */
+      if (finePointer && !reduceMotion) {
+        let rx = 0;
+        let ry = 0;
+        let tx = 0;
+        let ty = 0;
+        window.addEventListener(
+          'mousemove',
+          (e) => {
+            tx = e.clientX;
+            ty = e.clientY;
+          },
+          { passive: true },
+        );
+        gsap.ticker.add(() => {
+          rx += (tx - rx) * 0.18;
+          ry += (ty - ry) * 0.18;
+          const ring = document.getElementById('cursor-ring');
+          if (ring) ring.style.transform = `translate(${rx}px, ${ry}px)`;
+        });
+        document.addEventListener('mouseover', (e) => {
+          const ring = document.getElementById('cursor-ring');
+          const hit = (e.target as HTMLElement).closest('a, button');
+          if (ring) {
+            gsap.to(ring, {
+              scale: hit ? 1.7 : 1,
+              duration: 0.25,
+              overwrite: 'auto',
+            });
+          }
+        });
+
+        // 指针进入 iframe(giscus 等跨域嵌入)或离开窗口时隐藏光标环:
+        // 跨域 iframe 内部父页面收不到 mousemove,不隐藏的话圆环会冻结在边界上
+        const hideRing = () =>
+          document
+            .getElementById('cursor-ring')
+            ?.classList.add('ring-hidden');
+        const showRing = () =>
+          document
+            .getElementById('cursor-ring')
+            ?.classList.remove('ring-hidden');
+
+        document.documentElement.addEventListener('mouseleave', hideRing);
+        document.documentElement.addEventListener('mouseenter', showRing);
+
+        const scanIframes = () =>
+          document
+            .querySelectorAll<HTMLIFrameElement>(
+              'iframe:not([data-ring-watch])',
+            )
+            .forEach((f) => {
+              f.dataset.ringWatch = '1';
+              f.addEventListener('mouseenter', hideRing);
+              f.addEventListener('mouseleave', showRing);
+            });
+        scanIframes();
+        // giscus 的 iframe 是懒加载的,晚于页面出现——监听 DOM 变化,出现即接管
+        new MutationObserver(scanIframes).observe(document.documentElement, {
+          childList: true,
+          subtree: true,
+        });
+      }
+
+      /* ---------------- 阅读体验增强 ---------------- */
+      function enhanceReading(): void {
+        // 1) 代码块 mac 窗口栏 + 复制按钮(跳过已处理的)
+        document.querySelectorAll<HTMLElement>('pre.astro-code').forEach((pre) => {
+          if (pre.dataset.enhanced) return;
+          pre.dataset.enhanced = '1';
+
+          const wrap = document.createElement('div');
+          wrap.className = 'code-wrap';
+          pre.parentNode?.insertBefore(wrap, pre);
+          wrap.appendChild(pre);
+
+          const lang = (pre.dataset.language ?? 'code').toUpperCase();
+          const bar = document.createElement('div');
+          bar.className = 'code-bar';
+          bar.innerHTML =
+            '<span class="dots"><i></i><i></i><i></i></span>' +
+            `<span class="code-lang">${lang}</span>`;
+          wrap.appendChild(bar);
+
+          const btn = document.createElement('button');
+          btn.className = 'copy-btn';
+          btn.type = 'button';
+          btn.setAttribute('aria-label', '复制代码');
+          btn.textContent = '复制';
+          bar.appendChild(btn);
+
+          pre.classList.add('has-bar');
+        });
+
+        // 2) TOC 滚动高亮:当前阅读的小节在目录里点亮
+        const toc = document.getElementById('toc');
+        if (toc) {
+          const links = [
+            ...toc.querySelectorAll<HTMLAnchorElement>('a[href^="#"]'),
+          ];
+          const pairs: { link: HTMLAnchorElement; heading: HTMLElement }[] = [];
+          for (const link of links) {
+            const id = decodeURIComponent(
+              (link.getAttribute('href') ?? '').slice(1),
+            );
+            const heading = document.getElementById(id);
+            if (heading) pairs.push({ link, heading });
+          }
+          if (pairs.length && !reduceMotion) {
+            const spy = new IntersectionObserver(
+              (entries) => {
+                for (const entry of entries) {
+                  if (!entry.isIntersecting) continue;
+                  for (const { link } of pairs) {
+                    link.classList.remove('toc-active');
+                  }
+                  const hit = pairs.find(
+                    (p) => p.heading === entry.target,
+                  );
+                  hit?.link.classList.add('toc-active');
+                }
+              },
+              { rootMargin: '-15% 0px -70% 0px' },
+            );
+            pairs.forEach(({ heading }) => spy.observe(heading));
+          } else if (pairs.length) {
+            pairs[0].link.classList.add('toc-active');
+          }
+        }
+      }
+
+      // 复制按钮与图片灯箱:事件委托,换页不失效
+      document.addEventListener('click', async (event) => {
+        const target = event.target as HTMLElement;
+
+        const btn = target.closest<HTMLButtonElement>('.copy-btn');
+        if (btn) {
+          const code = btn.closest('.code-wrap')?.querySelector('code');
+          const text = code?.innerText ?? '';
+          try {
+            await navigator.clipboard.writeText(text);
+            btn.textContent = '已复制';
+          } catch {
+            btn.textContent = '复制失败';
+          }
+          setTimeout(() => (btn.textContent = '复制'), 1600);
+          return;
+        }
+
+        const img = target.closest<HTMLImageElement>('.prose-blog img');
+        if (img) {
+          let box = document.getElementById('lightbox');
+          if (!box) {
+            box = document.createElement('div');
+            box.id = 'lightbox';
+            box.setAttribute('aria-hidden', 'true');
+            document.body.appendChild(box);
+            box.addEventListener('click', () => box!.classList.remove('open'));
+          }
+          box.innerHTML = '';
+          const view = document.createElement('img');
+          view.src = img.src;
+          view.alt = img.alt;
+          box.appendChild(view);
+          box.classList.add('open');
+        }
+      });
+
+      document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+          document.getElementById('lightbox')?.classList.remove('open');
+        }
+      });
+
+      document.addEventListener('astro:page-load', () => {
+        if (!booted) {
+          // 首屏(整页加载):独立入场动画,不用幕布
+          booted = true;
+          initPage(true);
+          return;
+        }
+        if (curtainPlaying) {
+          curtainPlaying = false;
+          curtainOut();
+        } else {
+          curtain?.classList.remove('is-animating');
+        }
+        initPage(false);
+      });
+
+      /* ---------------- 主题切换(事件委托,换页不失效) ---------------- */
+      document.addEventListener('click', (event) => {
+        const target = event.target as HTMLElement;
+        const toggle = target.closest<HTMLElement>('[data-theme-toggle]');
+        if (toggle) {
+          const next =
+            document.documentElement.dataset.theme === 'dark'
+              ? 'light'
+              : 'dark';
+          document.documentElement.dataset.theme = next;
+          localStorage.setItem('theme-v2', next);
+          syncGiscusTheme();
+          return;
+        }
+        const menuToggle = target.closest<HTMLElement>('[data-menu-toggle]');
+        if (menuToggle) {
+          document.getElementById('mobile-menu')?.classList.toggle('hidden');
+        }
+      });
+
+      /* ---------------- 搜索弹窗 + pagefind 懒加载 ----------------
+         注意:换页会替换 body,弹窗元素会重建,
+         所以每次交互都要实时查询,绝不能缓存元素引用。 */
+      const getSearchDialog = () =>
+        document.getElementById(
+          'search-dialog',
+        ) as HTMLDialogElement | null;
+      let pagefindReady = false;
+      // BASE_URL 在客户端可能没有尾部斜杠(如 /blog),必须归一化
+      const siteBase = import.meta.env.BASE_URL.endsWith('/')
+        ? import.meta.env.BASE_URL
+        : `${import.meta.env.BASE_URL}/`;
+
+      function mountPagefindUi(): void {
+        const container = document.getElementById('pagefind-ui');
+        if (!container || container.childElementCount > 0) return;
+        const PagefindUI = (window as any).PagefindUI;
+        if (!PagefindUI) return;
+        new PagefindUI({
+          element: '#pagefind-ui',
+          showSubResults: true,
+          showImages: false,
+        });
+      }
+
+      async function ensurePagefind(): Promise<void> {
+        if (pagefindReady) {
+          mountPagefindUi();
+          return;
+        }
+        try {
+          await Promise.all([
+            new Promise<void>((resolve, reject) => {
+              const link = document.createElement('link');
+              link.rel = 'stylesheet';
+              link.href = `${siteBase}pagefind/pagefind-ui.css`;
+              link.onload = () => resolve();
+              link.onerror = () => reject(new Error('pagefind css 未找到'));
+              document.head.append(link);
+            }),
+            new Promise<void>((resolve, reject) => {
+              const script = document.createElement('script');
+              script.src = `${siteBase}pagefind/pagefind-ui.js`;
+              script.onload = () => resolve();
+              script.onerror = () => reject(new Error('pagefind js 未找到'));
+              document.body.append(script);
+            }),
+          ]);
+          pagefindReady = true;
+          mountPagefindUi();
+        } catch {
+          document
+            .querySelector('[data-search-fallback]')
+            ?.classList.remove('hidden');
+        }
+      }
+
+      document.addEventListener('click', (event) => {
+        const target = event.target as HTMLElement;
+        const dlg = getSearchDialog();
+        if (target.closest('[data-search-open]') && dlg && !dlg.open) {
+          dlg.showModal();
+          void ensurePagefind();
+        } else if (target.closest('[data-search-close]') && dlg?.open) {
+          dlg.close();
+        } else if (dlg && dlg.open && event.target === dlg) {
+          dlg.close(); // 点击遮罩区域关闭
+        }
+      });
+      document.addEventListener('keydown', (event) => {
+        if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+          event.preventDefault();
+          const dlg = getSearchDialog();
+          if (dlg && !dlg.open) {
+            dlg.showModal();
+            void ensurePagefind();
+          }
+        }
+      });
+    </script>
+  </body>
+</html>

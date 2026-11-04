@@ -1,0 +1,57 @@
+---
+import { SITE } from '../config';
+import { withBase } from '../utils/posts';
+
+const year = new Date().getFullYear();
+---
+
+<footer class="border-t border-border">
+  <div
+    class="mx-auto flex max-w-5xl flex-col items-center justify-between gap-4 px-5 py-10 text-sm text-muted sm:flex-row"
+  >
+    <p>
+      © {year}
+      {SITE.author} · 由
+      <a
+        href="https://astro.build"
+        target="_blank"
+        rel="noopener"
+        class="transition-colors hover:text-accent">Astro</a
+      > 强力驱动 · 主题源自
+      <a
+        href="https://github.com/Ulysses-G-Yang/blog"
+        target="_blank"
+        rel="noopener"
+        class="transition-colors hover:text-accent">Ulysses Yang</a
+      >
+    </p>
+    <div class="flex flex-wrap items-center justify-center gap-5">
+      <a href={withBase('/projects/')} class="transition-colors hover:text-accent"
+        >项目</a
+      >
+      <a href={withBase('/guestbook/')} class="transition-colors hover:text-accent"
+        >留言板</a
+      >
+      <a href={withBase('/links/')} class="transition-colors hover:text-accent"
+        >友链</a
+      >
+      <a href={withBase('/contribute/')} class="transition-colors hover:text-accent"
+        >投稿</a
+      >
+      <a href={withBase('/feed.xml')} class="transition-colors hover:text-accent"
+        >RSS</a
+      >
+      <a
+        href={SITE.github}
+        target="_blank"
+        rel="noopener"
+        class="transition-colors hover:text-accent">GitHub</a
+      >
+      <button
+        type="button"
+        data-search-open
+        class="cursor-pointer transition-colors hover:text-accent">搜索</button
+      >
+    </div>
+  </div>
+</footer>

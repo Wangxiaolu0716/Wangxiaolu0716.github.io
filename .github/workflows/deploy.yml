@@ -1,0 +1,77 @@
+name: 部署到 GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 同一时间只跑一个部署,新推送取消旧的
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: 安装依赖
+        run: npm ci
+
+      # OG 分享图渲染需要中文字体(带缓存,首次约 16MB)
+      - name: 缓存 OG 中文字体
+        uses: actions/cache@v4
+        with:
+          path: .fonts
+          key: og-font-noto-sc-v1
+
+      - name: 下载 OG 中文字体
+        run: |
+          mkdir -p .fonts
+          if [ ! -s .fonts/NotoSansSC.otf ]; then
+            curl -sL --fail -o .fonts/NotoSansSC.otf "https://raw.githubusercontent.com/googlefonts/noto-cjk/main/Sans/OTF/SimplifiedChinese/NotoSansCJKsc-Regular.otf"
+          fi
+          ls -la .fonts/
+
+      # GITHUB_TOKEN 供构建时拉取仓库 Discussions(留言板话题列表)
+      - name: 构建站点
+        run: npm run build
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # 手动打包 + overwrite:true,绕开 upload-pages-artifact 的 409 竞态问题
+      - name: 打包构建产物
+        run: tar -cvf artifact.tar -C dist .
+
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: github-pages
+          path: artifact.tar
+          retention-days: 1
+          if-no-files-found: error
+          overwrite: true
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: 发布到 GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
