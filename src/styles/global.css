@@ -193,7 +193,6 @@ body::before {
 
 html.js [data-reveal] {
   opacity: 0;
-  transform: translateY(26px);
 }
 html.js [data-hero] > * {
   opacity: 0;
