@@ -165,7 +165,20 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 
       <!-- 编辑器 -->
       <div class="order-1 lg:order-2">
-        <div class="rounded-2xl border border-border bg-surface p-4 sm:p-5">
+        <div id="editor-card" class="rounded-2xl border border-border bg-surface p-4 sm:p-5">
+          <div
+            id="local-draft-note"
+            class="mb-4 hidden items-center justify-between gap-3 rounded-xl border border-accent/40 bg-accent/5 px-3 py-2 text-xs text-muted"
+          >
+            <span id="local-draft-text"></span>
+            <button
+              id="local-draft-ok"
+              type="button"
+              class="shrink-0 text-accent hover:underline"
+            >
+              知道了
+            </button>
+          </div>
           <div class="grid gap-4 sm:grid-cols-2">
             <label class="sm:col-span-2">
               <span class="wr-label">标题</span>
@@ -318,12 +331,14 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 
           <div class="mt-5 flex flex-wrap items-center gap-3 border-t border-border pt-4">
             <button id="save-draft" type="button" class="btn-ghost">
-              存草稿
+              存草稿（不发布）
             </button>
             <button id="publish" type="button" class="btn-primary">
               发布
             </button>
-            <span class="text-xs text-muted">发布后约 2 分钟上线</span>
+            <span class="text-xs text-muted">
+              草稿只存 GitHub，不会显示在网站上；发布会自动部署
+            </span>
           </div>
           <div id="result-links" class="mt-3 flex flex-wrap gap-4 text-xs"></div>
         </div>
@@ -339,6 +354,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     const BRANCH = 'main';
     const API = 'https://api.github.com';
     const TOKEN_KEY = 'blog-write-token';
+    const DRAFT_KEY = 'blog-write-local-draft';
     const SITE = 'https://xuhuohua.xyz';
     const BLOG_DIR = 'src/content/blog';
 
@@ -496,6 +512,10 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       const saveDraftBtn = $<HTMLButtonElement>('save-draft');
       const publishBtn = $<HTMLButtonElement>('publish');
       const resultLinks = $<HTMLElement>('result-links');
+      const editorCard = $<HTMLElement>('editor-card');
+      const localDraftNote = $<HTMLElement>('local-draft-note');
+      const localDraftText = $<HTMLElement>('local-draft-text');
+      const localDraftOk = $<HTMLButtonElement>('local-draft-ok');
 
       let token = localStorage.getItem(TOKEN_KEY) ?? '';
       let currentPath = '';
@@ -504,6 +524,8 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       let slugTouched = false;
       let busy = false;
       let previewTimer: number | undefined;
+      let persistTimer: number | undefined;
+      let storageWarned = false;
 
       const setStatus = (msg: string, ok = true): void => {
         statusEl.textContent = msg;
@@ -524,6 +546,99 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         saveDraftBtn.disabled = value;
         publishBtn.disabled = value;
       };
+
+      let dirty = false;
+
+      const fmtSavedAt = (ts: number): string => {
+        const d = new Date(ts || Date.now());
+        const two = (n: number) => String(n).padStart(2, '0');
+        return `${d.getMonth() + 1}月${d.getDate()}日 ${two(d.getHours())}:${two(d.getMinutes())}`;
+      };
+
+      const editorSnapshot = () => ({
+        title: titleEl.value,
+        slug: slugEl.value,
+        date: dateEl.value,
+        desc: descEl.value,
+        category: categoryEl.value,
+        tags: tagsEl.value,
+        series: seriesEl.value,
+        order: orderEl.value,
+        body: bodyEl.value,
+        path: currentPath,
+        sha: currentSha,
+        updated: currentUpdated,
+        at: Date.now(),
+      });
+
+      const hideLocalNote = (): void => {
+        localDraftNote.classList.add('hidden');
+        localDraftNote.classList.remove('flex');
+      };
+
+      const showLocalNote = (at: number): void => {
+        localDraftText.textContent = `已恢复上次未保存的内容（${fmtSavedAt(at)}）。之后改动会自动保存在本机。`;
+        localDraftNote.classList.remove('hidden');
+        localDraftNote.classList.add('flex');
+      };
+
+      function persistNow(): void {
+        if (!dirty) return;
+        const snap = editorSnapshot();
+        try {
+          if (!snap.title.trim() && !snap.desc.trim() && !snap.body.trim()) {
+            localStorage.removeItem(DRAFT_KEY);
+            return;
+          }
+          localStorage.setItem(DRAFT_KEY, JSON.stringify(snap));
+        } catch {
+          if (!storageWarned) {
+            storageWarned = true;
+            setStatus('本机自动保存失败，请及时点发布', false);
+          }
+        }
+      }
+
+      function schedulePersist(): void {
+        dirty = true;
+        if (persistTimer) clearTimeout(persistTimer);
+        persistTimer = window.setTimeout(persistNow, 400);
+      }
+
+      function clearLocalDraft(): void {
+        localStorage.removeItem(DRAFT_KEY);
+        if (persistTimer) clearTimeout(persistTimer);
+        dirty = false;
+        hideLocalNote();
+      }
+
+      function restoreLocalDraft(): boolean {
+        const raw = localStorage.getItem(DRAFT_KEY);
+        if (!raw) return false;
+        try {
+          const d = JSON.parse(raw) as Record<string, any>;
+          if (!d || (!d.title && !d.desc && !d.body)) return false;
+          titleEl.value = d.title ?? '';
+          slugEl.value = d.slug || `post-${timeStamp()}`;
+          dateEl.value = d.date || today();
+          descEl.value = d.desc ?? '';
+          categoryEl.value = d.category === 'tech' ? 'tech' : 'essay';
+          tagsEl.value = d.tags ?? '';
+          seriesEl.value = d.series ?? '';
+          orderEl.value = d.order ?? '';
+          bodyEl.value = d.body ?? '';
+          currentPath = d.path ?? '';
+          currentSha = d.sha ?? '';
+          currentUpdated = d.updated ?? '';
+          slugTouched = true;
+          dirty = true;
+          stateBadge.textContent = '本地草稿';
+          showLocalNote(Number(d.at) || Date.now());
+          return true;
+        } catch {
+          return false;
+        }
+      }
 
       async function gh(path: string, init?: RequestInit): Promise<any> {
         const res = await fetch(API + path, {
@@ -618,6 +733,9 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       }
 
       async function loadPost(path: string): Promise<void> {
+        if (dirty && !confirm('当前有未保存的内容，载入其他文章会覆盖它，确定吗？')) {
+          return;
+        }
         try {
           setStatus('正在读取…');
           const data = await gh(
@@ -639,8 +757,9 @@ import BaseLayout from '../layouts/BaseLayout.astro';
           currentSha = data.sha;
           currentUpdated = meta.updatedDate ?? '';
           slugTouched = true;
-          stateBadge.textContent = meta.draft ? '草稿' : '已发布';
+          stateBadge.textContent = meta.draft ? '草稿（未发布）' : '已发布';
           resultLinks.innerHTML = '';
+          clearLocalDraft();
           setStatus('已载入，修改后点保存');
           bodyEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
         } catch (e: any) {
@@ -649,10 +768,21 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       }
 
       function newPost(): void {
+        if (dirty && !confirm('当前有未保存的内容，新建会覆盖它，确定吗？')) {
+          return;
+        }
+        resetEditor();
+        clearLocalDraft();
+        setStatus('已新建，可以开始写');
+        titleEl.focus();
+      }
+
+      function resetEditor(): void {
         currentPath = '';
         currentSha = '';
         currentUpdated = '';
         slugTouched = false;
+        dirty = false;
         titleEl.value = '';
         slugEl.value = `post-${timeStamp()}`;
         dateEl.value = today();
@@ -664,8 +794,6 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         bodyEl.value = '## 背景\n\n\n## 正文\n\n\n## 总结\n';
         stateBadge.textContent = '新文章';
         resultLinks.innerHTML = '';
-        setStatus('已新建，可以开始写');
-        titleEl.focus();
       }
 
       function collect(): PostDraft | null {
@@ -753,7 +881,8 @@ import BaseLayout from '../layouts/BaseLayout.astro';
           );
           currentPath = finalPath;
           currentSha = res.content.sha;
-          stateBadge.textContent = publish ? '已发布' : '草稿';
+          clearLocalDraft();
+          stateBadge.textContent = publish ? '已发布' : '草稿（未发布）';
           resultLinks.innerHTML = '';
           const ghLink = document.createElement('a');
           ghLink.href = `https://github.com/${OWNER}/${REPO}/blob/${BRANCH}/${finalPath}`;
@@ -761,14 +890,22 @@ import BaseLayout from '../layouts/BaseLayout.astro';
           ghLink.rel = 'noopener';
           ghLink.className = 'text-accent hover:underline';
           ghLink.textContent = '在 GitHub 查看 ↗';
-          const siteLink = document.createElement('a');
-          siteLink.href = `${SITE}/blog/${slugEl.value.trim()}/`;
-          siteLink.target = '_blank';
-          siteLink.rel = 'noopener';
-          siteLink.className = 'text-accent hover:underline';
-          siteLink.textContent = '打开线上文章（约 2 分钟后生效）↗';
-          resultLinks.append(ghLink, siteLink);
-          setStatus(publish ? '已发布，等待自动部署' : '已存草稿');
+          resultLinks.append(ghLink);
+          if (publish) {
+            const siteLink = document.createElement('a');
+            siteLink.href = `${SITE}/blog/${slugEl.value.trim()}/`;
+            siteLink.target = '_blank';
+            siteLink.rel = 'noopener';
+            siteLink.className = 'text-accent hover:underline';
+            siteLink.textContent = '打开线上文章（约 2 分钟后生效）↗';
+            resultLinks.append(siteLink);
+          } else {
+            const hint = document.createElement('span');
+            hint.className = 'text-muted';
+            hint.textContent = '草稿已保存到 GitHub，网站上不会显示';
+            resultLinks.append(hint);
+          }
+          setStatus(publish ? '已发布，等待自动部署' : '草稿已保存到 GitHub');
           void loadList();
         } catch (e: any) {
           setStatus(`保存失败：${e.message}`, false);
@@ -827,6 +964,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         bodyEl.focus();
         const pos = start + text.length;
         bodyEl.setSelectionRange(pos, pos);
+        schedulePersist();
       }
 
       function selectionRange(): {
@@ -852,6 +990,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         const a = selectStart ?? start + text.length;
         const b = selectEnd ?? a;
         bodyEl.setSelectionRange(a, b);
+        schedulePersist();
       }
 
       function wrapSelection(
@@ -1017,6 +1156,16 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         if (previewTimer) clearTimeout(previewTimer);
         previewTimer = window.setTimeout(renderPreview, 250);
       });
+
+      // 表单任何输入都自动存本机(400ms 防抖)
+      editorCard.addEventListener('input', schedulePersist);
+      editorCard.addEventListener('change', schedulePersist);
+      localDraftOk.addEventListener('click', hideLocalNote);
+      // 关闭标签页/切到后台时立刻落盘,避免来不及防抖
+      window.addEventListener('pagehide', persistNow);
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') persistNow();
+      });
       uploadBtn.addEventListener('click', () => imageInput.click());
       imageInput.addEventListener('change', () => {
         const file = imageInput.files?.[0];
@@ -1061,7 +1210,9 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       });
 
       // ===== 初始化 =====
-      newPost();
+      resetEditor();
+      const restored = restoreLocalDraft();
+      setStatus(restored ? '已恢复上次未保存的内容' : '已新建，可以开始写');
       if (token) {
         void checkAuth();
         void loadList();
