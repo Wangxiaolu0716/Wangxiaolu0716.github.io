@@ -9,8 +9,8 @@ export const SITE = {
   description: '人生三大主线：身体健康，提高认知，陪伴家人。',
   /** 作者名 */
   author: '王小路',
-  /** 站点地址(GitHub Pages 用户站点,部署在根路径) */
-  url: 'https://wangxiaolu0716.github.io',
+  /** 站点地址(自定义域名,部署在根路径) */
+  url: 'https://xuhuohua.xyz',
   /** 你的 GitHub 主页(页脚、关于页都会用到) */
   github: 'https://github.com/Wangxiaolu0716',
   /** 联系邮箱(展示在关于页,不需要可留空) */

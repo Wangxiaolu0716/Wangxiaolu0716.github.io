@@ -46,7 +46,8 @@ draft: false         # true = 草稿,不会发布
 
 推送到 `main` → GitHub Actions 自动构建 → 发布 GitHub Pages。
 
-线上地址:https://wangxiaolu0716.github.io/
+线上地址:https://xuhuohua.xyz/(阿里云服务器静态镜像)
+GitHub Pages 备份:https://wangxiaolu0716.github.io/
 
 ## 目录结构
 
