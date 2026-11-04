@@ -1,0 +1,827 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout
+  title="写作台"
+  description="在浏览器里写文章、上传图片并提交到 GitHub"
+  noindex
+>
+  <style>
+    .wr-input,
+    .wr-select,
+    .wr-textarea {
+      width: 100%;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      border-radius: 0.75rem;
+      padding: 0.55rem 0.75rem;
+      font-size: 0.875rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .wr-input:focus,
+    .wr-select:focus,
+    .wr-textarea:focus {
+      border-color: var(--accent);
+    }
+    .wr-label {
+      display: block;
+      margin-bottom: 0.35rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--muted);
+    }
+    .wr-textarea {
+      min-height: 55vh;
+      font-family: var(--font-mono, ui-monospace, monospace);
+      line-height: 1.7;
+      resize: vertical;
+    }
+  </style>
+
+  <section class="mx-auto max-w-6xl px-5 pt-14 pb-24" id="write-app" data-hero>
+    <div class="flex flex-wrap items-end justify-between gap-4">
+      <div>
+        <p class="label-mono text-accent">// write</p>
+        <h1 class="mt-3 text-3xl font-black tracking-tight sm:text-4xl">
+          写作台
+        </h1>
+        <p class="mt-2 text-sm text-muted">
+          写完点发布，GitHub Actions 会自动更新 xuhuohua.xyz 和 GitHub Pages。
+        </p>
+      </div>
+      <div
+        id="auth-status"
+        class="rounded-full border border-border px-3 py-1.5 text-xs text-muted"
+      >
+        未连接 GitHub
+      </div>
+    </div>
+
+    <!-- Token 配置 -->
+    <div class="mt-8 rounded-2xl border border-border bg-surface p-5">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <h2 class="text-sm font-bold">GitHub Token</h2>
+        <span class="text-xs text-muted">只保存在本机浏览器</span>
+      </div>
+      <div class="mt-3 flex flex-col gap-2 sm:flex-row">
+        <input
+          id="token-input"
+          type="password"
+          class="wr-input flex-1"
+          placeholder="粘贴 fine-grained token（Contents: Read and write）"
+          autocomplete="off"
+        />
+        <button id="token-save" type="button" class="btn-primary shrink-0">
+          保存
+        </button>
+        <button id="token-clear" type="button" class="btn-ghost shrink-0">
+          清除
+        </button>
+      </div>
+      <details class="mt-3 text-xs leading-relaxed text-muted">
+        <summary class="cursor-pointer select-none">
+          第一次用？点这里看 Token 创建步骤
+        </summary>
+        <ol class="mt-2 list-decimal space-y-1 pl-5">
+          <li>
+            打开
+            <a
+              class="text-accent hover:underline"
+              href="https://github.com/settings/personal-access-tokens/new"
+              target="_blank"
+              rel="noopener">GitHub → Fine-grained tokens ↗</a
+            >
+          </li>
+          <li>
+            Repository access 选 Only select repositories，只勾选
+            <code class="font-mono">Wangxiaolu0716.github.io</code>
+          </li>
+          <li>Permissions → Contents 设为 Read and write（Metadata 自动只读）</li>
+          <li>生成后复制，粘贴到上面保存；手机和电脑各粘贴一次即可</li>
+        </ol>
+        <p class="mt-2">
+          Token 只存在本机 localStorage，不会上传到服务器。设备不用了记得点「清除」，或去 GitHub 撤销。
+        </p>
+      </details>
+    </div>
+
+    <div class="mt-8 grid gap-6 lg:grid-cols-[300px_1fr]">
+      <!-- 文章列表 -->
+      <aside class="order-2 lg:order-1">
+        <div class="rounded-2xl border border-border bg-surface p-4">
+          <div class="flex items-center justify-between gap-2">
+            <h2 class="text-sm font-bold">已有文章</h2>
+            <button
+              id="refresh-list"
+              type="button"
+              class="label-mono text-muted hover:text-accent"
+            >
+              刷新
+            </button>
+          </div>
+          <div
+            id="post-list"
+            class="mt-3 max-h-[50vh] space-y-1 overflow-auto text-sm"
+          >
+            <p class="text-xs text-muted">加载中…</p>
+          </div>
+          <button id="new-post" type="button" class="btn-ghost mt-4 w-full">
+            + 新建文章
+          </button>
+        </div>
+      </aside>
+
+      <!-- 编辑器 -->
+      <div class="order-1 lg:order-2">
+        <div class="rounded-2xl border border-border bg-surface p-4 sm:p-5">
+          <div class="grid gap-4 sm:grid-cols-2">
+            <label class="sm:col-span-2">
+              <span class="wr-label">标题</span>
+              <input id="f-title" class="wr-input" placeholder="文章标题" />
+            </label>
+            <label>
+              <span class="wr-label">文件名 / 网址</span>
+              <input
+                id="f-slug"
+                class="wr-input"
+                placeholder="my-first-post"
+                autocapitalize="off"
+                spellcheck="false"
+              />
+            </label>
+            <label>
+              <span class="wr-label">发布日期</span>
+              <input id="f-date" class="wr-input" type="date" />
+            </label>
+            <label class="sm:col-span-2">
+              <span class="wr-label">摘要</span>
+              <input
+                id="f-desc"
+                class="wr-input"
+                placeholder="一句话摘要（列表、RSS、SEO 都用它）"
+              />
+            </label>
+            <label>
+              <span class="wr-label">分类</span>
+              <select id="f-category" class="wr-select">
+                <option value="essay">杂谈随笔</option>
+                <option value="tech">技术分享</option>
+              </select>
+            </label>
+            <label>
+              <span class="wr-label">标签（逗号分隔）</span>
+              <input id="f-tags" class="wr-input" placeholder="随笔, 记录" />
+            </label>
+            <label>
+              <span class="wr-label">系列（可选）</span>
+              <input id="f-series" class="wr-input" placeholder="留空即可" />
+            </label>
+            <label>
+              <span class="wr-label">系列序号（可选）</span>
+              <input
+                id="f-order"
+                class="wr-input"
+                type="number"
+                min="1"
+                placeholder="1"
+              />
+            </label>
+          </div>
+
+          <div class="mt-4 flex flex-wrap items-center gap-3">
+            <span
+              id="state-badge"
+              class="rounded-full border border-border px-2.5 py-1 font-mono text-[11px] text-muted"
+            >
+              新文章
+            </span>
+            <button id="upload-image" type="button" class="btn-ghost">
+              插入图片
+            </button>
+            <input id="image-input" type="file" accept="image/*" class="hidden" />
+            <button id="toggle-preview" type="button" class="btn-ghost">
+              预览
+            </button>
+            <span id="editor-status" class="text-xs text-muted"></span>
+          </div>
+
+          <textarea
+            id="f-body"
+            class="wr-textarea mt-4"
+            placeholder="正文用 Markdown 写……"
+            spellcheck="false"
+          ></textarea>
+
+          <div
+            id="preview-wrap"
+            class="mt-4 hidden overflow-hidden rounded-2xl border border-border"
+          >
+            <iframe
+              id="preview-frame"
+              sandbox=""
+              class="h-[60vh] w-full bg-white"
+            ></iframe>
+          </div>
+
+          <div class="mt-5 flex flex-wrap items-center gap-3 border-t border-border pt-4">
+            <button id="save-draft" type="button" class="btn-ghost">
+              存草稿
+            </button>
+            <button id="publish" type="button" class="btn-primary">
+              发布
+            </button>
+            <span class="text-xs text-muted">发布后约 2 分钟上线</span>
+          </div>
+          <div id="result-links" class="mt-3 flex flex-wrap gap-4 text-xs"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <script>
+    import { marked } from 'marked';
+
+    const OWNER = 'Wangxiaolu0716';
+    const REPO = 'Wangxiaolu0716.github.io';
+    const BRANCH = 'main';
+    const API = 'https://api.github.com';
+    const TOKEN_KEY = 'blog-write-token';
+    const SITE = 'https://xuhuohua.xyz';
+    const BLOG_DIR = 'src/content/blog';
+
+    marked.setOptions({ gfm: true, breaks: false });
+
+    const today = (): string => new Date().toLocaleDateString('en-CA');
+
+    const timeStamp = (): string => {
+      const d = new Date();
+      const two = (n: number) => String(n).padStart(2, '0');
+      return `${d.getFullYear()}${two(d.getMonth() + 1)}${two(d.getDate())}-${two(d.getHours())}${two(d.getMinutes())}`;
+    };
+
+    const slugify = (s: string): string =>
+      s
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9-]+/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '');
+
+    const encodePath = (p: string): string =>
+      p.split('/').map(encodeURIComponent).join('/');
+
+    function bytesToBase64(bytes: Uint8Array): string {
+      let bin = '';
+      const chunk = 0x8000;
+      for (let i = 0; i < bytes.length; i += chunk) {
+        bin += String.fromCharCode(...bytes.subarray(i, i + chunk));
+      }
+      return btoa(bin);
+    }
+
+    function textToBase64(text: string): string {
+      return bytesToBase64(new TextEncoder().encode(text));
+    }
+
+    function base64ToText(b64: string): string {
+      const bin = atob(b64.replace(/\s/g, ''));
+      const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
+      return new TextDecoder().decode(bytes);
+    }
+
+    interface PostDraft {
+      title: string;
+      description: string;
+      date: string;
+      category: string;
+      tags: string[];
+      series: string;
+      order: string;
+      draft: boolean;
+      body: string;
+    }
+
+    function unquote(v: string): string {
+      const s = v.trim();
+      if (s.startsWith('"') && s.endsWith('"')) {
+        try {
+          return JSON.parse(s);
+        } catch {
+          return s.slice(1, -1);
+        }
+      }
+      if (s.startsWith("'") && s.endsWith("'")) return s.slice(1, -1);
+      return s;
+    }
+
+    function parseFrontmatter(raw: string): {
+      meta: Record<string, any>;
+      body: string;
+    } {
+      const match = raw.match(/^\uFEFF?---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
+      if (!match) return { meta: {}, body: raw };
+      const meta: Record<string, any> = {};
+      for (const line of match[1].split(/\r?\n/)) {
+        const t = line.trim();
+        if (!t || t.startsWith('#')) continue;
+        const idx = line.indexOf(':');
+        if (idx < 0) continue;
+        const key = line.slice(0, idx).trim();
+        const val = line.slice(idx + 1).trim();
+        if (!val) continue;
+        if (key === 'tags') {
+          meta.tags = unquote(val)
+            .replace(/^\[|\]$/g, '')
+            .split(',')
+            .map((s) => unquote(s))
+            .filter(Boolean);
+        } else if (key === 'seriesOrder') {
+          meta.seriesOrder = Number(unquote(val)) || 0;
+        } else if (key === 'draft') {
+          meta.draft = unquote(val) === 'true';
+        } else {
+          meta[key] = unquote(val);
+        }
+      }
+      return { meta, body: raw.slice(match[0].length) };
+    }
+
+    function buildMarkdown(p: PostDraft, front: any): string {
+      const lines = [
+        '---',
+        `title: ${JSON.stringify(p.title)}`,
+        `description: ${JSON.stringify(p.description)}`,
+        `pubDate: ${p.date}`,
+      ];
+      if (front.updatedDate) lines.push(`updatedDate: ${front.updatedDate}`);
+      lines.push(`category: ${p.category}`);
+      if (p.series) lines.push(`series: ${JSON.stringify(p.series)}`);
+      if (p.order) lines.push(`seriesOrder: ${p.order}`);
+      lines.push(
+        `tags: [${p.tags.map((t) => JSON.stringify(t)).join(', ')}]`,
+        `draft: ${p.draft}`,
+        '---',
+        '',
+        p.body.trimEnd(),
+        '',
+      );
+      return lines.join('\n');
+    }
+
+    function init(): void {
+      const app = document.getElementById('write-app');
+      if (!app || app.dataset.ready === '1') return;
+      app.dataset.ready = '1';
+
+      const $ = <T extends HTMLElement>(id: string): T =>
+        document.getElementById(id) as T;
+
+      const tokenInput = $<HTMLInputElement>('token-input');
+      const tokenSave = $<HTMLButtonElement>('token-save');
+      const tokenClear = $<HTMLButtonElement>('token-clear');
+      const authEl = $<HTMLElement>('auth-status');
+      const postList = $<HTMLElement>('post-list');
+      const refreshBtn = $<HTMLButtonElement>('refresh-list');
+      const newBtn = $<HTMLButtonElement>('new-post');
+      const titleEl = $<HTMLInputElement>('f-title');
+      const slugEl = $<HTMLInputElement>('f-slug');
+      const dateEl = $<HTMLInputElement>('f-date');
+      const descEl = $<HTMLInputElement>('f-desc');
+      const categoryEl = $<HTMLSelectElement>('f-category');
+      const tagsEl = $<HTMLInputElement>('f-tags');
+      const seriesEl = $<HTMLInputElement>('f-series');
+      const orderEl = $<HTMLInputElement>('f-order');
+      const bodyEl = $<HTMLTextAreaElement>('f-body');
+      const stateBadge = $<HTMLElement>('state-badge');
+      const statusEl = $<HTMLElement>('editor-status');
+      const uploadBtn = $<HTMLButtonElement>('upload-image');
+      const imageInput = $<HTMLInputElement>('image-input');
+      const previewBtn = $<HTMLButtonElement>('toggle-preview');
+      const previewWrap = $<HTMLElement>('preview-wrap');
+      const previewFrame = $<HTMLIFrameElement>('preview-frame');
+      const saveDraftBtn = $<HTMLButtonElement>('save-draft');
+      const publishBtn = $<HTMLButtonElement>('publish');
+      const resultLinks = $<HTMLElement>('result-links');
+
+      let token = localStorage.getItem(TOKEN_KEY) ?? '';
+      let currentPath = '';
+      let currentSha = '';
+      let currentUpdated = '';
+      let slugTouched = false;
+      let busy = false;
+
+      const setStatus = (msg: string, ok = true): void => {
+        statusEl.textContent = msg;
+        statusEl.className = `text-xs ${ok ? 'text-muted' : 'text-accent'}`;
+      };
+
+      const setAuth = (connected: boolean, label: string): void => {
+        authEl.textContent = connected ? `已连接 ${label}` : label;
+        authEl.className = `rounded-full border px-3 py-1.5 text-xs ${
+          connected
+            ? 'border-accent/40 text-accent'
+            : 'border-border text-muted'
+        }`;
+      };
+
+      const setBusy = (value: boolean): void => {
+        busy = value;
+        saveDraftBtn.disabled = value;
+        publishBtn.disabled = value;
+      };
+
+      async function gh(path: string, init?: RequestInit): Promise<any> {
+        const res = await fetch(API + path, {
+          ...init,
+          headers: {
+            Accept: 'application/vnd.github+json',
+            Authorization: `Bearer ${token}`,
+            'X-GitHub-Api-Version': '2022-11-28',
+            ...(init?.headers ?? {}),
+          },
+        });
+        if (!res.ok) {
+          let msg = `${res.status} ${res.statusText}`;
+          try {
+            const j = await res.json();
+            if (j?.message) msg = j.message;
+          } catch {
+            /* ignore */
+          }
+          const err = new Error(msg) as Error & { status?: number };
+          err.status = res.status;
+          throw err;
+        }
+        return res.json();
+      }
+
+      async function checkAuth(): Promise<void> {
+        if (!token) {
+          setAuth(false, '未连接 GitHub');
+          return;
+        }
+        try {
+          const me = await gh('/user');
+          setAuth(true, `@${me.login}`);
+        } catch (e: any) {
+          setAuth(false, 'Token 无效或已过期');
+          setStatus(e.message, false);
+        }
+      }
+
+      async function loadList(): Promise<void> {
+        if (!token) {
+          postList.innerHTML = '';
+          const tip = document.createElement('p');
+          tip.className = 'text-xs text-muted';
+          tip.textContent = '先保存 GitHub Token 才能读取文章列表。';
+          postList.appendChild(tip);
+          return;
+        }
+        postList.innerHTML = '';
+        const loading = document.createElement('p');
+        loading.className = 'text-xs text-muted';
+        loading.textContent = '加载中…';
+        postList.appendChild(loading);
+        try {
+          const files = await gh(
+            `/repos/${OWNER}/${REPO}/contents/${BLOG_DIR}?ref=${BRANCH}`,
+          );
+          const list = (Array.isArray(files) ? files : [])
+            .filter(
+              (f: any) =>
+                f.type === 'file' &&
+                f.name.endsWith('.md') &&
+                !f.name.startsWith('_'),
+            )
+            .sort((a: any, b: any) => b.name.localeCompare(a.name));
+          postList.innerHTML = '';
+          if (!list.length) {
+            const empty = document.createElement('p');
+            empty.className = 'text-xs text-muted';
+            empty.textContent = '还没有文章。';
+            postList.appendChild(empty);
+            return;
+          }
+          for (const f of list) {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className =
+              'block w-full truncate rounded-lg px-2 py-1.5 text-left text-sm text-muted transition-colors hover:bg-bg-soft hover:text-accent';
+            btn.textContent = f.name.replace(/\.md$/, '');
+            btn.title = f.name;
+            btn.addEventListener('click', () => void loadPost(f.path));
+            postList.appendChild(btn);
+          }
+        } catch (e: any) {
+          postList.innerHTML = '';
+          const err = document.createElement('p');
+          err.className = 'text-xs text-accent';
+          err.textContent = e.message;
+          postList.appendChild(err);
+        }
+      }
+
+      async function loadPost(path: string): Promise<void> {
+        try {
+          setStatus('正在读取…');
+          const data = await gh(
+            `/repos/${OWNER}/${REPO}/contents/${encodePath(path)}?ref=${BRANCH}`,
+          );
+          const raw = base64ToText(data.content);
+          const parsed = parseFrontmatter(raw);
+          const meta = parsed.meta;
+          titleEl.value = meta.title ?? '';
+          slugEl.value = (path.split('/').pop() ?? '').replace(/\.md$/, '');
+          dateEl.value = String(meta.pubDate ?? '').slice(0, 10) || today();
+          descEl.value = meta.description ?? '';
+          categoryEl.value = meta.category === 'tech' ? 'tech' : 'essay';
+          tagsEl.value = Array.isArray(meta.tags) ? meta.tags.join(', ') : '';
+          seriesEl.value = meta.series ?? '';
+          orderEl.value = meta.seriesOrder ? String(meta.seriesOrder) : '';
+          bodyEl.value = parsed.body;
+          currentPath = path;
+          currentSha = data.sha;
+          currentUpdated = meta.updatedDate ?? '';
+          slugTouched = true;
+          stateBadge.textContent = meta.draft ? '草稿' : '已发布';
+          resultLinks.innerHTML = '';
+          setStatus('已载入，修改后点保存');
+          bodyEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        } catch (e: any) {
+          setStatus(e.message, false);
+        }
+      }
+
+      function newPost(): void {
+        currentPath = '';
+        currentSha = '';
+        currentUpdated = '';
+        slugTouched = false;
+        titleEl.value = '';
+        slugEl.value = `post-${timeStamp()}`;
+        dateEl.value = today();
+        descEl.value = '';
+        categoryEl.value = 'essay';
+        tagsEl.value = '';
+        seriesEl.value = '';
+        orderEl.value = '';
+        bodyEl.value = '## 背景\n\n\n## 正文\n\n\n## 总结\n';
+        stateBadge.textContent = '新文章';
+        resultLinks.innerHTML = '';
+        setStatus('已新建，可以开始写');
+        titleEl.focus();
+      }
+
+      function collect(): PostDraft | null {
+        const title = titleEl.value.trim();
+        const slug = slugify(slugEl.value);
+        const description = descEl.value.trim();
+        const date = dateEl.value;
+        if (!title) {
+          setStatus('标题不能为空', false);
+          return null;
+        }
+        if (!slug) {
+          setStatus('文件名不能为空，建议用英文或拼音', false);
+          return null;
+        }
+        if (!description) {
+          setStatus('摘要不能为空', false);
+          return null;
+        }
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+          setStatus('发布日期格式不对', false);
+          return null;
+        }
+        slugEl.value = slug;
+        return {
+          title,
+          description,
+          date,
+          category: categoryEl.value === 'tech' ? 'tech' : 'essay',
+          tags: tagsEl.value
+            .split(/[,，]/)
+            .map((s) => s.trim())
+            .filter(Boolean),
+          series: seriesEl.value.trim(),
+          order: orderEl.value.trim(),
+          draft: false,
+          body: bodyEl.value,
+        };
+      }
+
+      async function save(publish: boolean): Promise<void> {
+        if (busy) return;
+        if (!token) {
+          setStatus('先保存 GitHub Token', false);
+          return;
+        }
+        const post = collect();
+        if (!post) return;
+        post.draft = !publish;
+        const finalPath = `${BLOG_DIR}/${slugEl.value.trim()}.md`;
+        const apiPath = encodePath(finalPath);
+        setBusy(true);
+        setStatus(publish ? '正在发布…' : '正在存草稿…');
+        try {
+          let sha = finalPath === currentPath ? currentSha : '';
+          let existed = false;
+          if (!sha) {
+            try {
+              const existing = await gh(
+                `/repos/${OWNER}/${REPO}/contents/${apiPath}?ref=${BRANCH}`,
+              );
+              sha = existing.sha;
+              existed = true;
+            } catch (e: any) {
+              if (e.status !== 404) throw e;
+            }
+          }
+          if (existed && finalPath !== currentPath) {
+            if (!confirm('这个文件名已经存在，要覆盖它吗？')) {
+              setStatus('已取消');
+              return;
+            }
+          }
+          const payload: any = {
+            message: `${publish ? '发布' : '保存草稿'}: ${post.title}`,
+            content: textToBase64(
+              buildMarkdown(post, { updatedDate: currentUpdated }),
+            ),
+            branch: BRANCH,
+          };
+          if (sha) payload.sha = sha;
+          const res = await gh(
+            `/repos/${OWNER}/${REPO}/contents/${apiPath}`,
+            { method: 'PUT', body: JSON.stringify(payload) },
+          );
+          currentPath = finalPath;
+          currentSha = res.content.sha;
+          stateBadge.textContent = publish ? '已发布' : '草稿';
+          resultLinks.innerHTML = '';
+          const ghLink = document.createElement('a');
+          ghLink.href = `https://github.com/${OWNER}/${REPO}/blob/${BRANCH}/${finalPath}`;
+          ghLink.target = '_blank';
+          ghLink.rel = 'noopener';
+          ghLink.className = 'text-accent hover:underline';
+          ghLink.textContent = '在 GitHub 查看 ↗';
+          const siteLink = document.createElement('a');
+          siteLink.href = `${SITE}/blog/${slugEl.value.trim()}/`;
+          siteLink.target = '_blank';
+          siteLink.rel = 'noopener';
+          siteLink.className = 'text-accent hover:underline';
+          siteLink.textContent = '打开线上文章（约 2 分钟后生效）↗';
+          resultLinks.append(ghLink, siteLink);
+          setStatus(publish ? '已发布，等待自动部署' : '已存草稿');
+          void loadList();
+        } catch (e: any) {
+          setStatus(`保存失败：${e.message}`, false);
+        } finally {
+          setBusy(false);
+        }
+      }
+
+      async function uploadImage(file: File): Promise<void> {
+        if (!token) {
+          setStatus('先保存 GitHub Token', false);
+          return;
+        }
+        if (file.size > 10 * 1024 * 1024) {
+          setStatus('图片超过 10MB，请压缩后再传', false);
+          return;
+        }
+        const ext =
+          (file.name.split('.').pop() ?? 'png')
+            .toLowerCase()
+            .replace(/[^a-z0-9]/g, '') || 'png';
+        const base =
+          file.name
+            .replace(/\.[^.]+$/, '')
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '') || 'image';
+        const name = `${base}-${Date.now().toString(36)}.${ext}`;
+        const path = `public/images/${name}`;
+        setStatus('正在上传图片…');
+        try {
+          const bytes = new Uint8Array(await file.arrayBuffer());
+          await gh(
+            `/repos/${OWNER}/${REPO}/contents/${encodePath(path)}`,
+            {
+              method: 'PUT',
+              body: JSON.stringify({
+                message: `上传图片: ${name}`,
+                content: bytesToBase64(bytes),
+                branch: BRANCH,
+              }),
+            },
+          );
+          insertAtCursor(`\n![${base}](/images/${name})\n`);
+          setStatus('图片已上传并插入正文');
+        } catch (e: any) {
+          setStatus(`图片上传失败：${e.message}`, false);
+        }
+      }
+
+      function insertAtCursor(text: string): void {
+        const start = bodyEl.selectionStart ?? bodyEl.value.length;
+        const end = bodyEl.selectionEnd ?? start;
+        bodyEl.value =
+          bodyEl.value.slice(0, start) + text + bodyEl.value.slice(end);
+        bodyEl.focus();
+        const pos = start + text.length;
+        bodyEl.setSelectionRange(pos, pos);
+      }
+
+      function togglePreview(): void {
+        const hidden = previewWrap.classList.contains('hidden');
+        if (hidden) {
+          const html = marked.parse(bodyEl.value || '') as string;
+          previewFrame.srcdoc = `<!doctype html><html><head><meta charset="utf-8"><style>
+            body{margin:0;padding:28px;background:#fff;color:#1d1a24;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif;line-height:1.75;font-size:15px}
+            h1,h2,h3{line-height:1.3;margin:1.4em 0 .6em}
+            h1{font-size:1.7em}h2{font-size:1.35em}h3{font-size:1.15em}
+            p{margin:.8em 0}
+            a{color:#c25d76}
+            img{max-width:100%;border-radius:10px}
+            pre{background:#f5f2f6;padding:14px;border-radius:10px;overflow:auto;font-size:13px}
+            code{font-family:ui-monospace,Consolas,monospace;background:#f5f2f6;padding:.15em .35em;border-radius:4px}
+            pre code{padding:0;background:none}
+            blockquote{margin:1em 0;padding-left:14px;border-left:3px solid #c25d76;color:#6e6580}
+            ul,ol{padding-left:1.4em}
+            table{border-collapse:collapse}th,td{border:1px solid #ddd;padding:.4em .7em}
+          </style></head><body>${html}</body></html>`;
+          previewWrap.classList.remove('hidden');
+          previewBtn.textContent = '编辑';
+        } else {
+          previewWrap.classList.add('hidden');
+          previewBtn.textContent = '预览';
+        }
+      }
+
+      // ===== 事件绑定 =====
+      tokenSave.addEventListener('click', () => {
+        const value = tokenInput.value.trim();
+        if (!value) {
+          setStatus('请先粘贴 Token', false);
+          return;
+        }
+        token = value;
+        localStorage.setItem(TOKEN_KEY, value);
+        tokenInput.value = '';
+        setStatus('Token 已保存');
+        void checkAuth();
+        void loadList();
+      });
+
+      tokenClear.addEventListener('click', () => {
+        token = '';
+        localStorage.removeItem(TOKEN_KEY);
+        tokenInput.value = '';
+        setAuth(false, '未连接 GitHub');
+        setStatus('Token 已清除');
+        void loadList();
+      });
+
+      refreshBtn.addEventListener('click', () => void loadList());
+      newBtn.addEventListener('click', newPost);
+      saveDraftBtn.addEventListener('click', () => void save(false));
+      publishBtn.addEventListener('click', () => void save(true));
+      previewBtn.addEventListener('click', togglePreview);
+      uploadBtn.addEventListener('click', () => imageInput.click());
+      imageInput.addEventListener('change', () => {
+        const file = imageInput.files?.[0];
+        if (file) void uploadImage(file);
+        imageInput.value = '';
+      });
+      slugEl.addEventListener('input', () => {
+        slugTouched = true;
+      });
+      titleEl.addEventListener('input', () => {
+        if (slugTouched) return;
+        const s = slugify(titleEl.value);
+        slugEl.value = s || `post-${timeStamp()}`;
+      });
+
+      // ===== 初始化 =====
+      newPost();
+      if (token) {
+        void checkAuth();
+        void loadList();
+      } else {
+        void loadList();
+      }
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init, { once: true });
+    } else {
+      init();
+    }
+    document.addEventListener('astro:page-load', init);
+  </script>
+</BaseLayout>

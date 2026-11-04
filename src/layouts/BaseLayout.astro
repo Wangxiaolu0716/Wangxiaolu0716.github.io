@@ -24,6 +24,8 @@ interface Props {
   tags?: string[];
   /** 结构化数据 JSON-LD(SEO/GEO) */
   jsonLd?: Record<string, unknown>[];
+  /** 不收录到搜索引擎(写作台等内部页面) */
+  noindex?: boolean;
 }
 
 const {
@@ -35,6 +37,7 @@ const {
   modifiedTime,
   tags,
   jsonLd,
+  noindex = false,
 } = Astro.props;
 const fullTitle = title ? `${title} · ${SITE.title}` : SITE.title;
 const ogImage =
@@ -51,6 +54,7 @@ const canonical = new URL(Astro.url.pathname, SITE.url).href;
     <title>{fullTitle}</title>
     <meta name="description" content={description} />
     <meta name="author" content={SITE.author} />
+    {noindex && <meta name="robots" content="noindex, nofollow" />}
     <link rel="canonical" href={canonical} />
     <meta property="og:type" content={publishedTime ? 'article' : 'website'} />
     <meta property="og:site_name" content={SITE.title} />
