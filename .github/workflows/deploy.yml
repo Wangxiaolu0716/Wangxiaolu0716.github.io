@@ -86,12 +86,8 @@ jobs:
           name: github-pages
           path: artifact
 
-      - name: 解包
-        run: |
-          mkdir -p site
-          tar -xf artifact/artifact.tar -C site
-
       # 同步到阿里云 xuhuohua.xyz 的静态镜像目录
+      # 服务器没有 rsync,直接走 SSH + tar 解包,避免额外装软件
       - name: 同步到服务器
         env:
           SSHPASS: ${{ secrets.SERVER_PASSWORD }}
@@ -100,5 +96,7 @@ jobs:
           SERVER_PATH: ${{ secrets.SERVER_PATH }}
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq sshpass rsync
-          sshpass -e rsync -avz --delete -e "ssh -o StrictHostKeyChecking=no" site/ "$SERVER_USER@$SERVER_HOST:$SERVER_PATH/"
+          sudo apt-get install -y -qq sshpass
+          sshpass -e ssh -o StrictHostKeyChecking=no "$SERVER_USER@$SERVER_HOST" \
+            "rm -rf '$SERVER_PATH'/* && tar -xf - -C '$SERVER_PATH'" \
+            < artifact/artifact.tar
