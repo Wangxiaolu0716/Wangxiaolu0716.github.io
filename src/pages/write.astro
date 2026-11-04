@@ -39,6 +39,35 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       line-height: 1.7;
       resize: vertical;
     }
+    .wr-tool {
+      display: inline-flex;
+      height: 1.9rem;
+      min-width: 1.9rem;
+      align-items: center;
+      justify-content: center;
+      gap: 0.25rem;
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+      background: var(--bg);
+      color: var(--text);
+      padding: 0 0.5rem;
+      font-size: 0.75rem;
+      line-height: 1;
+      cursor: pointer;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .wr-tool:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .wr-tool input[type='color'] {
+      width: 1.15rem;
+      height: 1.15rem;
+      padding: 0;
+      border: none;
+      background: none;
+      cursor: pointer;
+    }
   </style>
 
   <section class="mx-auto max-w-6xl px-5 pt-14 pb-24" id="write-app" data-hero>
@@ -208,12 +237,79 @@ import BaseLayout from '../layouts/BaseLayout.astro';
             <span id="editor-status" class="text-xs text-muted"></span>
           </div>
 
+          <!-- 格式工具栏 -->
+          <div
+            id="format-toolbar"
+            class="mt-4 flex flex-wrap items-center gap-1.5 rounded-xl border border-border bg-bg-soft p-2"
+          >
+            <button type="button" data-format="bold" class="wr-tool" title="加粗 (Ctrl+B)">
+              <strong>B</strong>
+            </button>
+            <button type="button" data-format="italic" class="wr-tool" title="斜体 (Ctrl+I)">
+              <em>I</em>
+            </button>
+            <button type="button" data-format="underline" class="wr-tool" title="下划线">
+              <span class="underline">U</span>
+            </button>
+            <button type="button" data-format="strike" class="wr-tool" title="删除线">
+              <span class="line-through">S</span>
+            </button>
+            <span class="mx-1 h-5 w-px bg-border" aria-hidden="true"></span>
+            <button type="button" data-format="heading" class="wr-tool" title="二级标题">H2</button>
+            <button type="button" data-format="quote" class="wr-tool" title="引用">引用</button>
+            <button type="button" data-format="list" class="wr-tool" title="列表">列表</button>
+            <button type="button" data-format="code" class="wr-tool" title="代码">代码</button>
+            <span class="mx-1 h-5 w-px bg-border" aria-hidden="true"></span>
+            <button type="button" data-format="link" class="wr-tool" title="超链接 (Ctrl+K)">链接</button>
+            <input
+              id="f-color"
+              type="color"
+              value="#c25d76"
+              class="wr-tool"
+              title="选择文字颜色"
+            />
+            <button type="button" data-format="color" class="wr-tool" title="给选中文字上色">上色</button>
+            <button type="button" data-format="hr" class="wr-tool" title="分隔线">—</button>
+          </div>
+
           <textarea
             id="f-body"
-            class="wr-textarea mt-4"
+            class="wr-textarea mt-3"
             placeholder="正文用 Markdown 写……"
             spellcheck="false"
           ></textarea>
+
+          <!-- Markdown 速查 -->
+          <details class="mt-3 rounded-xl border border-border bg-bg-soft p-4 text-xs leading-relaxed text-muted">
+            <summary class="cursor-pointer select-none font-semibold text-text">
+              Markdown 写法速查（点开）
+            </summary>
+            <div class="mt-3 grid gap-x-6 gap-y-2 sm:grid-cols-2">
+              <div><code>**加粗**</code> → <strong>加粗</strong></div>
+              <div><code>*斜体*</code> → <em>斜体</em></div>
+              <div><code>~~删除线~~</code> → <span class="line-through">删除线</span></div>
+              <div><code>[文字](https://…)</code> → 超链接</div>
+              <div><code>![说明](/images/x.png)</code> → 图片</div>
+              <div><code>## 二级标题</code> → 小标题</div>
+              <div><code>- 列表项</code> → 无序列表</div>
+              <div><code>&gt; 引用</code> → 引用块</div>
+              <div><code>`代码`</code> 或三个反引号 → 代码</div>
+              <div><code>---</code> → 分隔线</div>
+            </div>
+            <p class="mt-3">
+              下划线和颜色不是标准 Markdown，会用 HTML：
+              <code>&lt;u&gt;文字&lt;/u&gt;</code>、
+              <code>&lt;span style="color:#c25d76"&gt;文字&lt;/span&gt;</code>，工具栏会自动插入，不用手写。
+            </p>
+            <p class="mt-1">
+              <a
+                class="text-accent hover:underline"
+                href="https://www.markdownguide.org/cheat-sheet/"
+                target="_blank"
+                rel="noopener">Markdown 官方速查表 ↗</a
+              >
+            </p>
+          </details>
 
           <div
             id="preview-wrap"
@@ -395,6 +491,8 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       const seriesEl = $<HTMLInputElement>('f-series');
       const orderEl = $<HTMLInputElement>('f-order');
       const bodyEl = $<HTMLTextAreaElement>('f-body');
+      const formatToolbar = $<HTMLElement>('format-toolbar');
+      const colorInput = $<HTMLInputElement>('f-color');
       const stateBadge = $<HTMLElement>('state-badge');
       const statusEl = $<HTMLElement>('editor-status');
       const uploadBtn = $<HTMLButtonElement>('upload-image');
@@ -737,6 +835,121 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         bodyEl.setSelectionRange(pos, pos);
       }
 
+      function selectionRange(): {
+        start: number;
+        end: number;
+        text: string;
+      } {
+        const start = bodyEl.selectionStart ?? 0;
+        const end = bodyEl.selectionEnd ?? start;
+        return { start, end, text: bodyEl.value.slice(start, end) };
+      }
+
+      function replaceRange(
+        start: number,
+        end: number,
+        text: string,
+        selectStart?: number,
+        selectEnd?: number,
+      ): void {
+        bodyEl.value =
+          bodyEl.value.slice(0, start) + text + bodyEl.value.slice(end);
+        bodyEl.focus();
+        const a = selectStart ?? start + text.length;
+        const b = selectEnd ?? a;
+        bodyEl.setSelectionRange(a, b);
+      }
+
+      function wrapSelection(
+        before: string,
+        after: string,
+        placeholder: string,
+      ): void {
+        const { start, end, text } = selectionRange();
+        const inner = text || placeholder;
+        replaceRange(
+          start,
+          end,
+          before + inner + after,
+          start + before.length,
+          start + before.length + inner.length,
+        );
+      }
+
+      /** 给当前行或选中行统一加前缀(引用/列表/标题用) */
+      function prefixLines(prefix: string): void {
+        const { start, end } = selectionRange();
+        const lineStart = bodyEl.value.lastIndexOf('\n', start - 1) + 1;
+        let blockEnd = end === start ? bodyEl.value.indexOf('\n', start) : end;
+        if (blockEnd < 0) blockEnd = bodyEl.value.length;
+        const block = bodyEl.value.slice(lineStart, blockEnd);
+        if (!block) {
+          insertAtCursor(prefix);
+          return;
+        }
+        const next = block
+          .split('\n')
+          .map((line) => prefix + line)
+          .join('\n');
+        replaceRange(lineStart, blockEnd, next, lineStart, lineStart + next.length);
+      }
+
+      function applyFormat(action: string): void {
+        switch (action) {
+          case 'bold':
+            wrapSelection('**', '**', '加粗文字');
+            break;
+          case 'italic':
+            wrapSelection('*', '*', '斜体文字');
+            break;
+          case 'underline':
+            wrapSelection('<u>', '</u>', '下划线文字');
+            break;
+          case 'strike':
+            wrapSelection('~~', '~~', '删除线文字');
+            break;
+          case 'link': {
+            const sel = selectionRange();
+            const url = prompt('链接地址（含 https://）', 'https://');
+            if (!url) return;
+            const inner = sel.text || '链接文字';
+            replaceRange(
+              sel.start,
+              sel.end,
+              `[${inner}](${url})`,
+              sel.start + 1,
+              sel.start + 1 + inner.length,
+            );
+            break;
+          }
+          case 'color':
+            wrapSelection(
+              `<span style="color:${colorInput.value}">`,
+              '</span>',
+              '彩色文字',
+            );
+            break;
+          case 'hr':
+            insertAtCursor('\n\n---\n\n');
+            break;
+          case 'heading':
+            prefixLines('## ');
+            break;
+          case 'quote':
+            prefixLines('> ');
+            break;
+          case 'list':
+            prefixLines('- ');
+            break;
+          case 'code': {
+            const { text } = selectionRange();
+            if (text.includes('\n')) wrapSelection('\n```\n', '\n```\n', '');
+            else wrapSelection('`', '`', '代码');
+            break;
+          }
+        }
+      }
+
       function togglePreview(): void {
         const hidden = previewWrap.classList.contains('hidden');
         if (hidden) {
@@ -798,6 +1011,34 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         if (file) void uploadImage(file);
         imageInput.value = '';
       });
+
+      // 点工具栏按钮时别让 textarea 失焦，保留选区
+      formatToolbar.addEventListener('mousedown', (event) => {
+        const target = event.target as HTMLElement;
+        if (target.closest('[data-format]')) event.preventDefault();
+      });
+      formatToolbar.addEventListener('click', (event) => {
+        const btn = (event.target as HTMLElement).closest<HTMLElement>(
+          '[data-format]',
+        );
+        if (!btn) return;
+        applyFormat(btn.dataset.format ?? '');
+      });
+      bodyEl.addEventListener('keydown', (event) => {
+        if (!(event.ctrlKey || event.metaKey)) return;
+        const key = event.key.toLowerCase();
+        if (key === 'b') {
+          event.preventDefault();
+          applyFormat('bold');
+        } else if (key === 'i') {
+          event.preventDefault();
+          applyFormat('italic');
+        } else if (key === 'k') {
+          event.preventDefault();
+          applyFormat('link');
+        }
+      });
+
       slugEl.addEventListener('input', () => {
         slugTouched = true;
       });
