@@ -1,13 +1,13 @@
 import type { APIRoute } from 'astro';
 import { getCollection } from 'astro:content';
 import { SITE } from '../config';
-import { BASE, sortPostsDesc } from '../utils/posts';
+import { BASE, isPublished, sortPostsDesc } from '../utils/posts';
 
 // llms.txt:面向生成式引擎(GPT/Perplexity/豆包/Kimi 等)的站点导览文件
 // 每次 构建时自动生成,文章列表自动保持最新
 export const GET: APIRoute = async () => {
   const posts = sortPostsDesc(
-    await getCollection('blog', ({ data }) => !data.draft),
+    await getCollection('blog', (post) => isPublished(post)),
   );
   const origin = new URL(SITE.url).origin;
   const page = (p: string) => `${origin}${BASE}${p.replace(/^\/+/, '')}`;

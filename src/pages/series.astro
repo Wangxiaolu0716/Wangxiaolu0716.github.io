@@ -1,10 +1,13 @@
 ---
 import { getCollection } from 'astro:content';
 import BaseLayout from '../layouts/BaseLayout.astro';
-import { categoryLabel, formatDate } from '../utils/posts';
+import { categoryLabel, formatDate, isPublished } from '../utils/posts';
 import type { Post } from '../utils/posts';
 
-const posts = await getCollection('blog', ({ data }) => !data.draft && data.series);
+const posts = await getCollection(
+  'blog',
+  (post) => isPublished(post) && Boolean(post.data.series),
+);
 
 // 系列名 → 按序号排列的文章
 const groups = new Map<string, Post[]>();

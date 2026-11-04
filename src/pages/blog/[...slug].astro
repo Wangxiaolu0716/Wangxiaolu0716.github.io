@@ -7,13 +7,13 @@ import TagPill from '../../components/TagPill.astro';
 import TOC from '../../components/TOC.astro';
 import PrevNext from '../../components/PrevNext.astro';
 import Giscus from '../../components/Giscus.astro';
-import { BASE, categoryLabel, readingMinutes, sortPostsDesc, withBase } from '../../utils/posts';
+import { BASE, categoryLabel, isPublished, readingMinutes, sortPostsDesc, withBase } from '../../utils/posts';
 import { SITE } from '../../config';
 import PostTools from '../../components/PostTools.astro';
 
 
 export async function getStaticPaths() {
-  const posts = await getCollection('blog', ({ data }) => !data.draft);
+  const posts = await getCollection('blog', (post) => isPublished(post));
   return posts.map((post) => ({
     params: { slug: post.id },
     props: { post },
@@ -26,7 +26,7 @@ const toc = headings.filter((h) => h.depth === 2 || h.depth === 3);
 
 // 上一篇 = 时间上更早的;下一篇 = 时间上更新的
 const sorted = sortPostsDesc(
-  await getCollection('blog', ({ data }) => !data.draft),
+  await getCollection('blog', (post) => isPublished(post)),
 );
 const index = sorted.findIndex((p) => p.id === post.id);
 const prev = index < sorted.length - 1 ? sorted[index + 1] : undefined;

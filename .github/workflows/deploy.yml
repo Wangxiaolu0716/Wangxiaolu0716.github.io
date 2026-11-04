@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+  # 每 15 分钟重建一次,定时发布的文章到点后自动上线
+  schedule:
+    - cron: '*/15 * * * *'
 
 permissions:
   contents: read

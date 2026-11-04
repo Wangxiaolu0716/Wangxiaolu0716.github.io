@@ -3,13 +3,14 @@ import { getCollection } from 'astro:content';
 import fs from 'node:fs';
 import path from 'node:path';
 import sharp from 'sharp';
+import { isPublished } from '../../utils/posts';
 
 // 每篇文章自动生成 OG 分享图(1200×630)。
 // 依赖中文字体 .fonts/NotoSansSC.otf(CI 里由 workflow 缓存下载);
 // 本地没有字体时,回退到站点默认分享图 public/og.png。
 
 export async function getStaticPaths() {
-  const posts = await getCollection('blog', ({ data }) => !data.draft);
+  const posts = await getCollection('blog', (post) => isPublished(post));
   return posts.map((post) => ({
     params: { slug: post.id },
     props: { post },

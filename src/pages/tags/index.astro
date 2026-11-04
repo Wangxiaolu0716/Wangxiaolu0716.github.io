@@ -1,10 +1,10 @@
 ---
 import { getCollection } from 'astro:content';
 import BaseLayout from '../../layouts/BaseLayout.astro';
-import { getAllTags, sortPostsDesc, withBase } from '../../utils/posts';
+import { getAllTags, isPublished, sortPostsDesc, withBase } from '../../utils/posts';
 
 const posts = sortPostsDesc(
-  await getCollection('blog', ({ data }) => !data.draft),
+  await getCollection('blog', (post) => isPublished(post)),
 );
 const tags = getAllTags(posts);
 ---

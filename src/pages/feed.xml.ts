@@ -2,11 +2,11 @@ import rss from '@astrojs/rss';
 import type { APIRoute } from 'astro';
 import { getCollection } from 'astro:content';
 import { SITE } from '../config';
-import { sortPostsDesc } from '../utils/posts';
+import { isPublished, sortPostsDesc } from '../utils/posts';
 
 export const GET: APIRoute = async () => {
   const posts = sortPostsDesc(
-    await getCollection('blog', ({ data }) => !data.draft),
+    await getCollection('blog', (post) => isPublished(post)),
   );
   const origin = new URL(SITE.url).origin;
 

@@ -206,6 +206,10 @@ import BaseLayout from '../layouts/BaseLayout.astro';
                 placeholder="一句话摘要（列表、RSS、SEO 都用它）"
               />
             </label>
+            <label class="sm:col-span-2">
+              <span class="wr-label">定时发布时间（可选，填了再点「定时发布」）</span>
+              <input id="f-scheduled" class="wr-input" type="datetime-local" />
+            </label>
             <label>
               <span class="wr-label">分类</span>
               <select id="f-category" class="wr-select">
@@ -333,11 +337,14 @@ import BaseLayout from '../layouts/BaseLayout.astro';
             <button id="save-draft" type="button" class="btn-ghost">
               存草稿（不发布）
             </button>
+            <button id="schedule-publish" type="button" class="btn-ghost">
+              定时发布
+            </button>
             <button id="publish" type="button" class="btn-primary">
               发布
             </button>
             <span class="text-xs text-muted">
-              草稿只存 GitHub，不会显示在网站上；发布会自动部署
+              草稿不会显示；定时文章到点后约 15 分钟内自动上线
             </span>
           </div>
           <div id="result-links" class="mt-3 flex flex-wrap gap-4 text-xs"></div>
@@ -495,6 +502,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       const titleEl = $<HTMLInputElement>('f-title');
       const slugEl = $<HTMLInputElement>('f-slug');
       const dateEl = $<HTMLInputElement>('f-date');
+      const scheduledEl = $<HTMLInputElement>('f-scheduled');
       const descEl = $<HTMLInputElement>('f-desc');
       const categoryEl = $<HTMLSelectElement>('f-category');
       const tagsEl = $<HTMLInputElement>('f-tags');
@@ -510,6 +518,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       const previewBtn = $<HTMLButtonElement>('toggle-preview');
       const previewWrap = $<HTMLElement>('preview-wrap');
       const saveDraftBtn = $<HTMLButtonElement>('save-draft');
+      const scheduleBtn = $<HTMLButtonElement>('schedule-publish');
       const publishBtn = $<HTMLButtonElement>('publish');
       const resultLinks = $<HTMLElement>('result-links');
       const editorCard = $<HTMLElement>('editor-card');
@@ -544,10 +553,26 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       const setBusy = (value: boolean): void => {
         busy = value;
         saveDraftBtn.disabled = value;
+        scheduleBtn.disabled = value;
         publishBtn.disabled = value;
       };
 
       let dirty = false;
+
+      /** 把 Date 转成 datetime-local 需要的本地格式 */
+      const toLocalInput = (value: string | Date): string => {
+        const d = new Date(value);
+        if (Number.isNaN(d.getTime())) return '';
+        const two = (n: number) => String(n).padStart(2, '0');
+        return `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())}T${two(d.getHours())}:${two(d.getMinutes())}`;
+      };
+
+      const fmtTime = (value: string | Date): string => {
+        const d = new Date(value);
+        if (Number.isNaN(d.getTime())) return '时间无效';
+        const two = (n: number) => String(n).padStart(2, '0');
+        return `${d.getMonth() + 1}月${d.getDate()}日 ${two(d.getHours())}:${two(d.getMinutes())}`;
+      };
 
       const fmtSavedAt = (ts: number): string => {
         const d = new Date(ts || Date.now());
@@ -559,6 +584,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         title: titleEl.value,
         slug: slugEl.value,
         date: dateEl.value,
+        scheduled: scheduledEl.value,
         desc: descEl.value,
         category: categoryEl.value,
         tags: tagsEl.value,
@@ -621,6 +647,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
           titleEl.value = d.title ?? '';
           slugEl.value = d.slug || `post-${timeStamp()}`;
           dateEl.value = d.date || today();
+          scheduledEl.value = d.scheduled ?? '';
           descEl.value = d.desc ?? '';
           categoryEl.value = d.category === 'tech' ? 'tech' : 'essay';
           tagsEl.value = d.tags ?? '';
@@ -679,6 +706,195 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         }
       }
 
+      type ListGroup = 'published' | 'scheduled' | 'draft';
+
+      interface ListItem {
+        path: string;
+        name: string;
+        title: string;
+        sha: string;
+        raw: string;
+        meta: Record<string, any>;
+        group: ListGroup;
+      }
+
+      let knownPosts: ListItem[] = [];
+      let listRequestId = 0;
+
+      async function mapLimit<T, R>(
+        items: T[],
+        limit: number,
+        fn: (item: T) => Promise<R>,
+      ): Promise<R[]> {
+        const out = new Array<R>(items.length);
+        let next = 0;
+        const workers = Array.from(
+          { length: Math.min(limit, items.length) },
+          async () => {
+            while (true) {
+              const index = next++;
+              if (index >= items.length) return;
+              out[index] = await fn(items[index]);
+            }
+          },
+        );
+        await Promise.all(workers);
+        return out;
+      }
+
+      async function fetchListItem(file: any): Promise<ListItem | null> {
+        try {
+          const data = await gh(
+            `/repos/${OWNER}/${REPO}/contents/${encodePath(file.path)}?ref=${BRANCH}`,
+          );
+          const raw = base64ToText(data.content);
+          const { meta } = parseFrontmatter(raw);
+          const pub = new Date(String(meta.pubDate ?? ''));
+          const future =
+            !meta.draft &&
+            !Number.isNaN(pub.getTime()) &&
+            pub.getTime() > Date.now();
+          return {
+            path: file.path,
+            name: file.name,
+            title: meta.title || file.name.replace(/\.md$/, ''),
+            sha: data.sha,
+            raw,
+            meta,
+            group: meta.draft ? 'draft' : future ? 'scheduled' : 'published',
+          };
+        } catch {
+          return null;
+        }
+      }
+
+      function renderGroups(items: ListItem[]): void {
+        postList.innerHTML = '';
+        if (!items.length) {
+          const empty = document.createElement('p');
+          empty.className = 'text-xs text-muted';
+          empty.textContent = '还没有文章。';
+          postList.appendChild(empty);
+          return;
+        }
+        const published = items
+          .filter((i) => i.group === 'published')
+          .sort(
+            (a, b) =>
+              new Date(String(b.meta.pubDate)).getTime() -
+              new Date(String(a.meta.pubDate)).getTime(),
+          );
+        const scheduled = items
+          .filter((i) => i.group === 'scheduled')
+          .sort(
+            (a, b) =>
+              new Date(String(a.meta.pubDate)).getTime() -
+              new Date(String(b.meta.pubDate)).getTime(),
+          );
+        const drafts = items
+          .filter((i) => i.group === 'draft')
+          .sort((a, b) => b.name.localeCompare(a.name));
+
+        const renderGroup = (
+          label: string,
+          groupItems: ListItem[],
+          first: boolean,
+          withDelete: boolean,
+        ) => {
+          if (!groupItems.length) return;
+          const heading = document.createElement('p');
+          heading.className = `label-mono text-[11px] text-muted ${first ? '' : 'mt-4'}`;
+          heading.textContent = `${label}  ${groupItems.length}`;
+          postList.appendChild(heading);
+
+          const wrap = document.createElement('div');
+          wrap.className = 'mt-1.5 space-y-0.5';
+          for (const item of groupItems) {
+            const row = document.createElement('div');
+            row.className = 'flex items-center gap-1';
+
+            const main = document.createElement('button');
+            main.type = 'button';
+            main.className =
+              'min-w-0 flex-1 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-bg-soft';
+            main.title = item.name;
+            const title = document.createElement('span');
+            title.className =
+              'block truncate text-sm font-medium text-text';
+            title.textContent = item.title;
+            const sub = document.createElement('span');
+            sub.className =
+              'mt-0.5 block truncate font-mono text-[11px] text-muted';
+            sub.textContent =
+              item.group === 'scheduled'
+                ? `${fmtTime(String(item.meta.pubDate))} · ${item.name}`
+                : item.name;
+            main.append(title, sub);
+            main.addEventListener('click', () => void loadPost(item.path));
+            row.appendChild(main);
+
+            if (withDelete) {
+              const del = document.createElement('button');
+              del.type = 'button';
+              del.className =
+                'shrink-0 rounded px-1.5 py-1 text-[11px] text-muted transition-colors hover:text-accent';
+              del.title = '删除草稿';
+              del.textContent = '删除';
+              del.addEventListener('click', () => void deleteDraft(item));
+              row.appendChild(del);
+            }
+            wrap.appendChild(row);
+          }
+          postList.appendChild(wrap);
+        };
+
+        renderGroup('已发布', published, true, false);
+        renderGroup('定时发布', scheduled, published.length === 0, false);
+        renderGroup(
+          '草稿',
+          drafts,
+          published.length === 0 && scheduled.length === 0,
+          true,
+        );
+      }
+
+      async function deleteDraft(item: ListItem): Promise<void> {
+        if (!token) {
+          setStatus('先保存 GitHub Token', false);
+          return;
+        }
+        if (
+          !confirm(
+            `删除草稿「${item.title || item.name}」？删除后不可恢复。`,
+          )
+        ) {
+          return;
+        }
+        try {
+          setStatus('正在删除草稿…');
+          await gh(
+            `/repos/${OWNER}/${REPO}/contents/${encodePath(item.path)}`,
+            {
+              method: 'DELETE',
+              body: JSON.stringify({
+                message: `删除草稿: ${item.name}`,
+                sha: item.sha,
+                branch: BRANCH,
+              }),
+            },
+          );
+          knownPosts = knownPosts.filter((i) => i.path !== item.path);
+          if (currentPath === item.path) {
+            resetEditor();
+            clearLocalDraft();
+          }
+          setStatus('草稿已删除');
+          void loadList();
+        } catch (e: any) {
+          setStatus(`删除失败：${e.message}`, false);
+        }
+      }
+
       async function loadList(): Promise<void> {
         if (!token) {
           postList.innerHTML = '';
@@ -693,37 +909,23 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         loading.className = 'text-xs text-muted';
         loading.textContent = '加载中…';
         postList.appendChild(loading);
+        const requestId = ++listRequestId;
         try {
           const files = await gh(
             `/repos/${OWNER}/${REPO}/contents/${BLOG_DIR}?ref=${BRANCH}`,
           );
-          const list = (Array.isArray(files) ? files : [])
-            .filter(
-              (f: any) =>
-                f.type === 'file' &&
-                f.name.endsWith('.md') &&
-                !f.name.startsWith('_'),
-            )
-            .sort((a: any, b: any) => b.name.localeCompare(a.name));
-          postList.innerHTML = '';
-          if (!list.length) {
-            const empty = document.createElement('p');
-            empty.className = 'text-xs text-muted';
-            empty.textContent = '还没有文章。';
-            postList.appendChild(empty);
-            return;
-          }
-          for (const f of list) {
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className =
-              'block w-full truncate rounded-lg px-2 py-1.5 text-left text-sm text-muted transition-colors hover:bg-bg-soft hover:text-accent';
-            btn.textContent = f.name.replace(/\.md$/, '');
-            btn.title = f.name;
-            btn.addEventListener('click', () => void loadPost(f.path));
-            postList.appendChild(btn);
-          }
+          const listFiles = (Array.isArray(files) ? files : []).filter(
+            (f: any) =>
+              f.type === 'file' &&
+              f.name.endsWith('.md') &&
+              !f.name.startsWith('_'),
+          );
+          const fetched = await mapLimit(listFiles, 4, fetchListItem);
+          if (requestId !== listRequestId) return;
+          knownPosts = fetched.filter(Boolean) as ListItem[];
+          renderGroups(knownPosts);
         } catch (e: any) {
+          if (requestId !== listRequestId) return;
           postList.innerHTML = '';
           const err = document.createElement('p');
           err.className = 'text-xs text-accent';
@@ -738,15 +940,31 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         }
         try {
           setStatus('正在读取…');
-          const data = await gh(
-            `/repos/${OWNER}/${REPO}/contents/${encodePath(path)}?ref=${BRANCH}`,
-          );
-          const raw = base64ToText(data.content);
+          let raw = '';
+          let sha = '';
+          const cached = knownPosts.find((p) => p.path === path);
+          if (cached) {
+            raw = cached.raw;
+            sha = cached.sha;
+          } else {
+            const data = await gh(
+              `/repos/${OWNER}/${REPO}/contents/${encodePath(path)}?ref=${BRANCH}`,
+            );
+            raw = base64ToText(data.content);
+            sha = data.sha;
+          }
           const parsed = parseFrontmatter(raw);
           const meta = parsed.meta;
+          const pub = new Date(String(meta.pubDate ?? ''));
+          const pubValid = !Number.isNaN(pub.getTime());
+          const future =
+            !meta.draft && pubValid && pub.getTime() > Date.now();
           titleEl.value = meta.title ?? '';
           slugEl.value = (path.split('/').pop() ?? '').replace(/\.md$/, '');
-          dateEl.value = String(meta.pubDate ?? '').slice(0, 10) || today();
+          dateEl.value = pubValid
+            ? toLocalInput(pub).slice(0, 10)
+            : today();
+          scheduledEl.value = future ? toLocalInput(pub) : '';
           descEl.value = meta.description ?? '';
           categoryEl.value = meta.category === 'tech' ? 'tech' : 'essay';
           tagsEl.value = Array.isArray(meta.tags) ? meta.tags.join(', ') : '';
@@ -754,10 +972,14 @@ import BaseLayout from '../layouts/BaseLayout.astro';
           orderEl.value = meta.seriesOrder ? String(meta.seriesOrder) : '';
           bodyEl.value = parsed.body;
           currentPath = path;
-          currentSha = data.sha;
+          currentSha = sha;
           currentUpdated = meta.updatedDate ?? '';
           slugTouched = true;
-          stateBadge.textContent = meta.draft ? '草稿（未发布）' : '已发布';
+          stateBadge.textContent = meta.draft
+            ? '草稿（未发布）'
+            : future
+              ? `定时发布 · ${fmtTime(pub)}`
+              : '已发布';
           resultLinks.innerHTML = '';
           clearLocalDraft();
           setStatus('已载入，修改后点保存');
@@ -786,6 +1008,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         titleEl.value = '';
         slugEl.value = `post-${timeStamp()}`;
         dateEl.value = today();
+        scheduledEl.value = '';
         descEl.value = '';
         categoryEl.value = 'essay';
         tagsEl.value = '';
@@ -834,7 +1057,9 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         };
       }
 
-      async function save(publish: boolean): Promise<void> {
+      async function save(
+        mode: 'draft' | 'publish' | 'schedule',
+      ): Promise<void> {
         if (busy) return;
         if (!token) {
           setStatus('先保存 GitHub Token', false);
@@ -842,11 +1067,37 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         }
         const post = collect();
         if (!post) return;
-        post.draft = !publish;
+        const publishing = mode === 'publish';
+        const scheduling = mode === 'schedule';
+        if (scheduling) {
+          if (!scheduledEl.value) {
+            setStatus('先填「定时发布时间」', false);
+            return;
+          }
+          const when = new Date(scheduledEl.value);
+          if (
+            Number.isNaN(when.getTime()) ||
+            when.getTime() <= Date.now() + 60 * 1000
+          ) {
+            setStatus('定时时间要晚于现在至少 1 分钟', false);
+            return;
+          }
+          post.date = when.toISOString();
+          post.draft = false;
+          dateEl.value = toLocalInput(when).slice(0, 10);
+        } else {
+          post.draft = !publishing;
+        }
         const finalPath = `${BLOG_DIR}/${slugEl.value.trim()}.md`;
         const apiPath = encodePath(finalPath);
         setBusy(true);
-        setStatus(publish ? '正在发布…' : '正在存草稿…');
+        setStatus(
+          scheduling
+            ? '正在定时…'
+            : publishing
+              ? '正在发布…'
+              : '正在存草稿…',
+        );
         try {
           let sha = finalPath === currentPath ? currentSha : '';
           let existed = false;
@@ -868,7 +1119,9 @@ import BaseLayout from '../layouts/BaseLayout.astro';
             }
           }
           const payload: any = {
-            message: `${publish ? '发布' : '保存草稿'}: ${post.title}`,
+            message: `${
+              scheduling ? '定时发布' : publishing ? '发布' : '保存草稿'
+            }: ${post.title}`,
             content: textToBase64(
               buildMarkdown(post, { updatedDate: currentUpdated }),
             ),
@@ -882,7 +1135,11 @@ import BaseLayout from '../layouts/BaseLayout.astro';
           currentPath = finalPath;
           currentSha = res.content.sha;
           clearLocalDraft();
-          stateBadge.textContent = publish ? '已发布' : '草稿（未发布）';
+          stateBadge.textContent = scheduling
+            ? `定时发布 · ${fmtTime(post.date)}`
+            : publishing
+              ? '已发布'
+              : '草稿（未发布）';
           resultLinks.innerHTML = '';
           const ghLink = document.createElement('a');
           ghLink.href = `https://github.com/${OWNER}/${REPO}/blob/${BRANCH}/${finalPath}`;
@@ -891,7 +1148,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
           ghLink.className = 'text-accent hover:underline';
           ghLink.textContent = '在 GitHub 查看 ↗';
           resultLinks.append(ghLink);
-          if (publish) {
+          if (publishing) {
             const siteLink = document.createElement('a');
             siteLink.href = `${SITE}/blog/${slugEl.value.trim()}/`;
             siteLink.target = '_blank';
@@ -899,13 +1156,24 @@ import BaseLayout from '../layouts/BaseLayout.astro';
             siteLink.className = 'text-accent hover:underline';
             siteLink.textContent = '打开线上文章（约 2 分钟后生效）↗';
             resultLinks.append(siteLink);
+          } else if (scheduling) {
+            const hint = document.createElement('span');
+            hint.className = 'text-accent';
+            hint.textContent = `将于 ${fmtTime(post.date)} 自动上线（每 15 分钟构建一次）`;
+            resultLinks.append(hint);
           } else {
             const hint = document.createElement('span');
             hint.className = 'text-muted';
             hint.textContent = '草稿已保存到 GitHub，网站上不会显示';
             resultLinks.append(hint);
           }
-          setStatus(publish ? '已发布，等待自动部署' : '草稿已保存到 GitHub');
+          setStatus(
+            publishing
+              ? '已发布，等待自动部署'
+              : scheduling
+                ? `已定时：${fmtTime(post.date)}`
+                : '草稿已保存到 GitHub',
+          );
           void loadList();
         } catch (e: any) {
           setStatus(`保存失败：${e.message}`, false);
@@ -1147,8 +1415,9 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 
       refreshBtn.addEventListener('click', () => void loadList());
       newBtn.addEventListener('click', newPost);
-      saveDraftBtn.addEventListener('click', () => void save(false));
-      publishBtn.addEventListener('click', () => void save(true));
+      saveDraftBtn.addEventListener('click', () => void save('draft'));
+      scheduleBtn.addEventListener('click', () => void save('schedule'));
+      publishBtn.addEventListener('click', () => void save('publish'));
       previewBtn.addEventListener('click', togglePreview);
       // 预览开着时,正文改动 250ms 后自动刷新预览
       bodyEl.addEventListener('input', () => {

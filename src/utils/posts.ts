@@ -18,6 +18,10 @@ export const sortPostsDesc = (posts: Post[]): Post[] =>
     (a, b) => b.data.pubDate.getTime() - a.data.pubDate.getTime(),
   );
 
+/** 已发布:不是草稿,且已到发布时间(定时文章到点后才会生成) */
+export const isPublished = (post: Post): boolean =>
+  !post.data.draft && post.data.pubDate.getTime() <= Date.now();
+
 /** 板块定义:key 对应 frontmatter 的 category 字段 */
 export const CATEGORIES = [
   { key: 'tech', label: '技术分享' },

@@ -1,9 +1,9 @@
 ---
 import { getCollection } from 'astro:content';
 import BaseLayout from '../layouts/BaseLayout.astro';
-import { formatDate, groupByYear, withBase } from '../utils/posts';
+import { formatDate, groupByYear, isPublished, withBase } from '../utils/posts';
 
-const posts = await getCollection('blog', ({ data }) => !data.draft);
+const posts = await getCollection('blog', (post) => isPublished(post));
 const groups = groupByYear(posts);
 ---
 
