@@ -1,6 +1,7 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import { FRIENDS } from '../data/friends';
+import { withBase } from '../utils/posts';
 ---
 
 <BaseLayout title="友链" description="朋友们的地方">
@@ -10,7 +11,7 @@ import { FRIENDS } from '../data/friends';
       <h1 class="mt-3 text-4xl font-black tracking-tight">友链</h1>
       <p class="mt-5 leading-relaxed text-muted">
         朋友们的地方。想交换友链:在
-        <a href="/blog/guestbook/" class="text-accent hover:underline">留言板</a>
+        <a href={withBase('/guestbook/')} class="text-accent hover:underline">留言板</a>
         留言,或直接提 PR 改
         <code class="font-mono text-sm">src/data/friends.ts</code>,
         附上站点名、链接和一句话介绍。
