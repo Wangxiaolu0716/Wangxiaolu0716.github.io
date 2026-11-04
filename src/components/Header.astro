@@ -36,10 +36,9 @@ const isActive = (href: string) => {
       ) : (
         <a
           href={withBase('/')}
-          class="text-lg font-black tracking-tight transition-opacity hover:opacity-70"
+          class="min-w-0 text-base font-black tracking-tight transition-opacity hover:opacity-70 sm:text-lg"
         >
-          <span class="hidden sm:inline">{SITE.title}</span>
-          <span class="sm:hidden">王小路</span>
+          <span class="block truncate">{SITE.title}</span>
         </a>
       )
     }
