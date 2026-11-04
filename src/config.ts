@@ -4,7 +4,7 @@
 
 export const SITE = {
   /** 站点名(浏览器标题、页头 Logo、RSS) */
-  title: '超级宅王小路',
+  title: '超级宅王小路の博客',
   /** 站点描述(SEO / RSS / 分享卡片) */
   description: '人生三大主线：身体健康，提高认知，陪伴家人。',
   /** 作者名 */
