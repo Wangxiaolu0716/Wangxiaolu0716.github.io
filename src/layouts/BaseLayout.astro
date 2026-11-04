@@ -6,6 +6,7 @@ import '../styles/global.css';
 import Header from '../components/Header.astro';
 import Footer from '../components/Footer.astro';
 import Curtain from '../components/Curtain.astro';
+import AboutWipe from '../components/AboutWipe.astro';
 import SearchModal from '../components/SearchModal.astro';
 
 interface Props {
@@ -129,6 +130,7 @@ const canonical = new URL(Astro.url.pathname, SITE.url).href;
     </main>
     <Footer />
     <Curtain />
+    <AboutWipe />
     <SearchModal />
 
     <script>
@@ -236,23 +238,106 @@ const canonical = new URL(Astro.url.pathname, SITE.url).href;
           );
       }
 
-      // 转场纪律:
-      // 1) 打开网站:不播幕布,只走独立入场动画(hero 逐段浮现)
-      // 2) 之后每次换页(含回到首页)都播幕布,同一页面内的锚点跳转不播
+      /* ---------------- 关于页专属转场(圆点扩散) ---------------- */
+      const aboutWipe = document.getElementById('about-wipe');
+      const aboutDot =
+        aboutWipe?.querySelector<HTMLElement>('.about-wipe-dot') ?? null;
+      const aboutLabel =
+        aboutWipe?.querySelector<HTMLElement>('.about-wipe-label') ?? null;
+      const aboutTargets = () =>
+        [aboutDot, ...(aboutLabel ? [aboutLabel] : [])].filter(
+          Boolean,
+        ) as HTMLElement[];
+
+      function aboutWipeIn(source?: HTMLElement | null): Promise<void> {
+        if (!aboutWipe || !aboutDot) return Promise.resolve();
+        aboutWipe.classList.add('is-animating');
+        if (reduceMotion) return Promise.resolve();
+        // 从点击位置扩散;键盘/后退等没有来源元素时从屏幕中心扩散
+        const rect = source?.getBoundingClientRect();
+        const x = rect ? rect.left + rect.width / 2 : window.innerWidth / 2;
+        const y = rect ? rect.top + rect.height / 2 : window.innerHeight / 2;
+        aboutDot.style.left = `${x}px`;
+        aboutDot.style.top = `${y}px`;
+        gsap.killTweensOf(aboutTargets());
+        gsap.set(aboutDot, {
+          xPercent: -50,
+          yPercent: -50,
+          scale: 0,
+          opacity: 1,
+        });
+        gsap.set(aboutLabel, { opacity: 0 });
+        return gsap
+          .timeline()
+          .to(aboutDot, { scale: 1, duration: 0.55, ease: 'power3.inOut' })
+          .to(aboutLabel, { opacity: 1, duration: 0.22 }, '-=0.22')
+          .then();
+      }
+
+      function aboutWipeOut(): void {
+        if (!aboutWipe || !aboutDot) return;
+        if (reduceMotion) {
+          aboutWipe.classList.remove('is-animating');
+          return;
+        }
+        gsap.killTweensOf(aboutTargets());
+        gsap
+          .timeline({
+            onComplete: () => {
+              aboutWipe.classList.remove('is-animating');
+              gsap.set(aboutDot, { scale: 0, opacity: 1 });
+              gsap.set(aboutLabel, { opacity: 0 });
+            },
+          })
+          .to(aboutLabel, { opacity: 0, duration: 0.2 })
+          .to(
+            aboutDot,
+            { opacity: 0, duration: 0.5, ease: 'power2.out' },
+            '-=0.1',
+          );
+      }
+
+      // 转场规则:
+      // - 点进文章、从文章返回博客列表:幕布(竖条帘片)
+      // - 进入「关于」页:圆点扩散(另一种样式)
+      // - 项目/留言板/标签/归档等其他页面:不动画
+      // - 同一页面内的锚点跳转(如文章目录):不动画
+      const isArticle = (p: string) =>
+        p.startsWith('/blog/') &&
+        p !== '/blog/' &&
+        !p.startsWith('/blog/category/');
+      const isAboutPage = (p: string) => p === '/about/';
+
       let booted = false; // 是否已走完首屏
       let curtainPlaying = false; // 本次导航是否在播幕布
+      let aboutWipePlaying = false; // 本次导航是否在播圆点转场
 
       document.addEventListener('astro:before-preparation', (event) => {
         const to = (event as any).to as URL | undefined;
         const from = (event as any).from as URL | undefined;
-        // 只改 hash 的同页跳转(如文章目录)不播转场
-        const samePage =
-          Boolean(to && from) && to!.pathname === from!.pathname;
+        const toP = to?.pathname ?? '';
+        const fromP = from?.pathname ?? '';
+        const samePage = Boolean(toP && fromP) && toP === fromP;
+        const mode = samePage
+          ? 'none'
+          : isAboutPage(toP)
+            ? 'about'
+            : isArticle(toP) ||
+                (toP === '/blog/' && isArticle(fromP))
+              ? 'curtain'
+              : 'none';
         const originalLoader = (event as any).loader as () => Promise<void>;
         (event as any).loader = async () => {
-          if (!samePage && !reduceMotion) {
+          if (mode === 'curtain' && !reduceMotion) {
             curtainPlaying = true;
             await Promise.race([curtainIn(), wait(1200)]);
+          }
+          if (mode === 'about' && !reduceMotion) {
+            aboutWipePlaying = true;
+            await Promise.race([
+              aboutWipeIn((event as any).sourceElement),
+              wait(1200),
+            ]);
           }
           await originalLoader.call(event);
         };
@@ -576,11 +661,15 @@ const canonical = new URL(Astro.url.pathname, SITE.url).href;
           initPage(true);
           return;
         }
-        if (curtainPlaying) {
+        if (aboutWipePlaying) {
+          aboutWipePlaying = false;
+          aboutWipeOut();
+        } else if (curtainPlaying) {
           curtainPlaying = false;
           curtainOut();
         } else {
           curtain?.classList.remove('is-animating');
+          aboutWipe?.classList.remove('is-animating');
         }
         initPage(false);
       });

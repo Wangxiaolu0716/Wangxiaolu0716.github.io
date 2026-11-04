@@ -244,6 +244,44 @@ html.js [data-hero] > * {
 }
 
 /* ============================================================
+   关于页专属转场:玫瑰色圆点从点击位置扩散,与幕布帘片区分开
+   ============================================================ */
+.about-wipe {
+  position: fixed;
+  inset: 0;
+  z-index: 91;
+  pointer-events: none;
+  visibility: hidden;
+  overflow: hidden;
+}
+.about-wipe.is-animating {
+  visibility: visible;
+  pointer-events: all;
+}
+.about-wipe-dot {
+  position: absolute;
+  width: 220vmax;
+  height: 220vmax;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 50%, #d4738a 0%, #a5455f 55%, #7d3149 100%);
+  transform: translate(-50%, -50%) scale(0);
+  will-change: transform, opacity;
+}
+.about-wipe-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  color: #fff;
+  font-weight: 900;
+  font-size: clamp(20px, 4vw, 44px);
+  letter-spacing: 0.35em;
+  text-indent: 0.35em;
+}
+
+/* ============================================================
    阅读进度条
    ============================================================ */
 
