@@ -314,13 +314,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
           <div
             id="preview-wrap"
             class="mt-4 hidden overflow-hidden rounded-2xl border border-border"
-          >
-            <iframe
-              id="preview-frame"
-              sandbox=""
-              class="h-[60vh] w-full bg-white"
-            ></iframe>
-          </div>
+          ></div>
 
           <div class="mt-5 flex flex-wrap items-center gap-3 border-t border-border pt-4">
             <button id="save-draft" type="button" class="btn-ghost">
@@ -499,7 +493,6 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       const imageInput = $<HTMLInputElement>('image-input');
       const previewBtn = $<HTMLButtonElement>('toggle-preview');
       const previewWrap = $<HTMLElement>('preview-wrap');
-      const previewFrame = $<HTMLIFrameElement>('preview-frame');
       const saveDraftBtn = $<HTMLButtonElement>('save-draft');
       const publishBtn = $<HTMLButtonElement>('publish');
       const resultLinks = $<HTMLElement>('result-links');
@@ -510,6 +503,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       let currentUpdated = '';
       let slugTouched = false;
       let busy = false;
+      let previewTimer: number | undefined;
 
       const setStatus = (msg: string, ok = true): void => {
         statusEl.textContent = msg;
@@ -950,11 +944,14 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         }
       }
 
-      function togglePreview(): void {
-        const hidden = previewWrap.classList.contains('hidden');
-        if (hidden) {
-          const html = marked.parse(bodyEl.value || '') as string;
-          previewFrame.srcdoc = `<!doctype html><html><head><meta charset="utf-8"><style>
+      /** 重新渲染预览:每次换一个新的 iframe,避免某些浏览器
+          在隐藏状态下写入 srcdoc 后显示为空白。 */
+      function renderPreview(): void {
+        const html = marked.parse(bodyEl.value || '') as string;
+        const frame = document.createElement('iframe');
+        frame.className = 'h-[60vh] w-full bg-white';
+        frame.setAttribute('sandbox', '');
+        frame.srcdoc = `<!doctype html><html><head><meta charset="utf-8"><style>
             body{margin:0;padding:28px;background:#fff;color:#1d1a24;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif;line-height:1.75;font-size:15px}
             h1,h2,h3{line-height:1.3;margin:1.4em 0 .6em}
             h1{font-size:1.7em}h2{font-size:1.35em}h3{font-size:1.15em}
@@ -968,11 +965,20 @@ import BaseLayout from '../layouts/BaseLayout.astro';
             ul,ol{padding-left:1.4em}
             table{border-collapse:collapse}th,td{border:1px solid #ddd;padding:.4em .7em}
           </style></head><body>${html}</body></html>`;
+        previewWrap.replaceChildren(frame);
+      }
+
+      function togglePreview(): void {
+        const hidden = previewWrap.classList.contains('hidden');
+        if (hidden) {
+          // 先显示容器再渲染,顺序不能反
           previewWrap.classList.remove('hidden');
-          previewBtn.textContent = '编辑';
+          previewBtn.textContent = '返回编辑';
+          requestAnimationFrame(renderPreview);
         } else {
           previewWrap.classList.add('hidden');
           previewBtn.textContent = '预览';
+          if (previewTimer) clearTimeout(previewTimer);
         }
       }
 
@@ -1005,6 +1011,12 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       saveDraftBtn.addEventListener('click', () => void save(false));
       publishBtn.addEventListener('click', () => void save(true));
       previewBtn.addEventListener('click', togglePreview);
+      // 预览开着时,正文改动 250ms 后自动刷新预览
+      bodyEl.addEventListener('input', () => {
+        if (previewWrap.classList.contains('hidden')) return;
+        if (previewTimer) clearTimeout(previewTimer);
+        previewTimer = window.setTimeout(renderPreview, 250);
+      });
       uploadBtn.addEventListener('click', () => imageInput.click());
       imageInput.addEventListener('change', () => {
         const file = imageInput.files?.[0];
