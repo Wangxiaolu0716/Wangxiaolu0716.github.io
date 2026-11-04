@@ -75,3 +75,30 @@ jobs:
       - name: 发布到 GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+  deploy-server:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: 下载构建产物
+        uses: actions/download-artifact@v4
+        with:
+          name: github-pages
+          path: artifact
+
+      - name: 解包
+        run: |
+          mkdir -p site
+          tar -xf artifact/artifact.tar -C site
+
+      # 同步到阿里云 xuhuohua.xyz 的静态镜像目录
+      - name: 同步到服务器
+        env:
+          SSHPASS: ${{ secrets.SERVER_PASSWORD }}
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+          SERVER_PATH: ${{ secrets.SERVER_PATH }}
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq sshpass rsync
+          sshpass -e rsync -avz --delete -e "ssh -o StrictHostKeyChecking=no" site/ "$SERVER_USER@$SERVER_HOST:$SERVER_PATH/"
