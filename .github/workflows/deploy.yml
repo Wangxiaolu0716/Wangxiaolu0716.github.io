@@ -4,9 +4,9 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
-  # 每 15 分钟重建一次,定时发布的文章到点后自动上线
+  # 每 5 分钟只做一次轻量检查,只有文章到点且还没上线时才真正构建
   schedule:
-    - cron: '*/15 * * * *'
+    - cron: '*/5 * * * *'
 
 permissions:
   contents: read
@@ -19,7 +19,29 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # 定时触发时先检查:没有到点的文章就直接跳过,不做全量构建
+  check:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    outputs:
+      should_build: ${{ steps.check.outputs.should_build }}
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: 检查到点未上线的文章
+        id: check
+        run: node scripts/check-due.mjs
+
   build:
+    needs: check
+    # push / 手动触发永远构建;定时触发只有确实有文章到点才构建
+    if: always() && (github.event_name != 'schedule' || needs.check.outputs.should_build == 'true' || needs.check.result == 'failure')
     runs-on: ubuntu-latest
     steps:
       - name: 检出代码
