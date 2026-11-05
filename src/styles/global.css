@@ -253,6 +253,7 @@ html.js [data-hero] > * {
   pointer-events: none;
   visibility: hidden;
   overflow: hidden;
+  contain: layout paint;
 }
 .about-wipe.is-animating {
   visibility: visible;
@@ -260,12 +261,15 @@ html.js [data-hero] > * {
 }
 .about-wipe-dot {
   position: absolute;
+  left: 0;
+  top: 0;
   width: 220vmax;
   height: 220vmax;
   border-radius: 50%;
-  background: radial-gradient(circle at 50% 50%, #d4738a 0%, #a5455f 55%, #7d3149 100%);
-  transform: translate(-50%, -50%) scale(0);
-  will-change: transform, opacity;
+  /* 纯色比超大径向渐变省很多合成开销,手机端更稳 */
+  background: #c25d76;
+  transform: translate3d(-50%, -50%, 0) scale(0);
+  backface-visibility: hidden;
 }
 .about-wipe-label {
   position: absolute;
