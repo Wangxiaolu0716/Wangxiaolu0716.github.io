@@ -1,8 +1,28 @@
 <!--
   关于页专属转场:玫瑰色圆点从点击位置扩散铺满屏幕,
+  遮罩期间加一层轻量循环装饰(网格/星点/线条/方块/雷达圈)。
   和幕布(竖条帘片)刻意做出区别。transition:persist 保证换页时不被销毁。
 -->
 <div id="about-wipe" class="about-wipe" transition:persist="about-wipe" aria-hidden="true">
   <div class="about-wipe-dot"></div>
+  <div class="about-wipe-deco" aria-hidden="true">
+    <span class="aw-ring"></span>
+    <span class="aw-ring aw-ring-2"></span>
+    <span class="aw-line aw-line-1" style="--delay: 0s"></span>
+    <span class="aw-line aw-line-2" style="--delay: 0.6s"></span>
+    <span class="aw-line aw-line-3" style="--delay: 1.2s"></span>
+    <span class="aw-square aw-square-1" style="--delay: 0.2s"></span>
+    <span class="aw-square aw-square-2" style="--delay: 1.1s"></span>
+    <span class="aw-square aw-square-3" style="--delay: 2s"></span>
+    <span class="aw-star" style="left: 9%; top: 15%; --delay: 0.1s">✦</span>
+    <span class="aw-star" style="left: 22%; top: 68%; --delay: 0.9s; font-size: 12px">✦</span>
+    <span class="aw-star" style="left: 38%; top: 28%; --delay: 1.6s; font-size: 10px">✧</span>
+    <span class="aw-star" style="left: 55%; top: 82%; --delay: 0.5s">✦</span>
+    <span class="aw-star" style="left: 72%; top: 20%; --delay: 1.3s; font-size: 20px">✦</span>
+    <span class="aw-star" style="left: 86%; top: 62%; --delay: 0.3s; font-size: 12px">✧</span>
+    <span class="aw-star" style="left: 46%; top: 10%; --delay: 2.1s; font-size: 11px">✦</span>
+    <span class="aw-star" style="left: 66%; top: 44%; --delay: 1.8s; font-size: 24px">✦</span>
+    <span class="aw-star" style="left: 28%; top: 88%; --delay: 0.7s; font-size: 14px">✧</span>
+  </div>
   <div class="about-wipe-label">关于我 · ABOUT</div>
 </div>

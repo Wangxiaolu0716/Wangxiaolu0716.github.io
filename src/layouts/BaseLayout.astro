@@ -248,8 +248,10 @@ const canonical = new URL(Astro.url.pathname, SITE.url).href;
         aboutWipe?.querySelector<HTMLElement>('.about-wipe-dot') ?? null;
       const aboutLabel =
         aboutWipe?.querySelector<HTMLElement>('.about-wipe-label') ?? null;
+      const aboutDeco =
+        aboutWipe?.querySelector<HTMLElement>('.about-wipe-deco') ?? null;
       const aboutTargets = () =>
-        [aboutDot, ...(aboutLabel ? [aboutLabel] : [])].filter(
+        [aboutDot, aboutDeco, ...(aboutLabel ? [aboutLabel] : [])].filter(
           Boolean,
         ) as HTMLElement[];
 
@@ -292,19 +294,34 @@ const canonical = new URL(Astro.url.pathname, SITE.url).href;
           opacity: 1,
           force3D: true,
         });
+        if (aboutDeco) gsap.set(aboutDeco, { opacity: 0 });
         gsap.set(aboutLabel, { opacity: 0 });
-        return gsap
+        const timeline = gsap
           .timeline()
           .to(aboutDot, {
             scale: 1,
-            duration: 0.45,
+            duration: 0.65,
             ease: 'power2.out',
             onComplete: () => {
               aboutDot.style.willChange = 'auto';
             },
-          })
-          .to(aboutLabel, { opacity: 1, duration: 0.2 }, '-=0.18')
-          .then();
+          });
+        if (aboutDeco) {
+          timeline.to(
+            aboutDeco,
+            { opacity: 1, duration: 0.3, ease: 'power1.out' },
+            '-=0.1',
+          );
+        }
+        timeline.to(
+          aboutLabel,
+          { opacity: 1, duration: 0.25, ease: 'power1.out' },
+          '-=0.18',
+        );
+        // 铺满后多停留一小段,让循环装饰露出来再揭幕
+        return timeline
+          .then()
+          .then(() => wait(500));
       }
 
       function aboutWipeOut(): void {
@@ -315,21 +332,34 @@ const canonical = new URL(Astro.url.pathname, SITE.url).href;
         }
         gsap.killTweensOf(aboutTargets());
         aboutDot.style.willChange = 'transform, opacity';
-        gsap
+        const timeline = gsap
           .timeline({
             onComplete: () => {
               aboutWipe.classList.remove('is-animating');
               aboutDot.style.willChange = 'auto';
               gsap.set(aboutDot, { scale: 0, opacity: 1 });
+              if (aboutDeco) gsap.set(aboutDeco, { opacity: 0 });
               gsap.set(aboutLabel, { opacity: 0 });
             },
           })
-          .to(aboutLabel, { opacity: 0, duration: 0.18 })
-          .to(
-            aboutDot,
-            { opacity: 0, duration: 0.5, ease: 'power2.out' },
-            '-=0.1',
+          .to(aboutLabel, { opacity: 0, duration: 0.18 });
+        if (aboutDeco) {
+          timeline.to(
+            aboutDeco,
+            { opacity: 0, duration: 0.45, ease: 'power1.out' },
+            '-=0.05',
           );
+        }
+        timeline.to(
+          aboutDot,
+          {
+            opacity: 0,
+            scale: 1.04,
+            duration: 0.7,
+            ease: 'power2.out',
+          },
+          '-=0.35',
+        );
       }
 
       // 转场规则:
@@ -371,7 +401,7 @@ const canonical = new URL(Astro.url.pathname, SITE.url).href;
             aboutWipePlaying = true;
             await Promise.race([
               aboutWipeIn((event as any).sourceElement),
-              wait(1200),
+              wait(2000),
             ]);
           }
           await originalLoader.call(event);

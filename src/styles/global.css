@@ -274,6 +274,7 @@ html.js [data-hero] > * {
 .about-wipe-label {
   position: absolute;
   inset: 0;
+  z-index: 2;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -283,6 +284,152 @@ html.js [data-hero] > * {
   font-size: clamp(20px, 4vw, 44px);
   letter-spacing: 0.35em;
   text-indent: 0.35em;
+}
+
+/* 遮罩铺满后的循环装饰:科技网格 + 星点 + 扫线 + 方块 + 雷达圈 */
+.about-wipe-deco {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  opacity: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.055) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+.about-wipe-deco > * {
+  animation-play-state: paused;
+}
+.about-wipe.is-animating .about-wipe-deco > * {
+  animation-play-state: running;
+}
+
+.aw-star {
+  position: absolute;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 16px;
+  line-height: 1;
+  animation: aw-twinkle 2.6s ease-in-out infinite;
+  animation-delay: var(--delay, 0s);
+}
+@keyframes aw-twinkle {
+  0%,
+  100% {
+    opacity: 0.15;
+    transform: scale(0.7);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}
+
+.aw-line {
+  position: absolute;
+  left: -56%;
+  width: 56%;
+  height: 1px;
+  opacity: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.55),
+    transparent
+  );
+  animation: aw-line 3.2s linear infinite;
+  animation-delay: var(--delay, 0s);
+}
+.aw-line-1 {
+  top: 24%;
+}
+.aw-line-2 {
+  top: 58%;
+}
+.aw-line-3 {
+  top: 78%;
+}
+@keyframes aw-line {
+  0% {
+    transform: translateX(0);
+    opacity: 0;
+  }
+  15% {
+    opacity: 0.7;
+  }
+  75% {
+    opacity: 0.7;
+  }
+  100% {
+    transform: translateX(260%);
+    opacity: 0;
+  }
+}
+
+.aw-square {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  animation: aw-square 3.4s ease-in-out infinite;
+  animation-delay: var(--delay, 0s);
+}
+.aw-square-1 {
+  left: 16%;
+  top: 34%;
+}
+.aw-square-2 {
+  left: 76%;
+  top: 30%;
+  width: 20px;
+  height: 20px;
+}
+.aw-square-3 {
+  left: 62%;
+  top: 72%;
+  width: 10px;
+  height: 10px;
+}
+@keyframes aw-square {
+  0%,
+  100% {
+    opacity: 0.15;
+    transform: rotate(0deg) scale(0.8);
+  }
+  50% {
+    opacity: 0.75;
+    transform: rotate(90deg) scale(1.05);
+  }
+}
+
+.aw-ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 44vmin;
+  height: 44vmin;
+  margin: -22vmin 0 0 -22vmin;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 50%;
+  opacity: 0;
+  animation: aw-ring 2.8s ease-out infinite;
+  animation-delay: var(--delay, 0s);
+}
+.aw-ring-2 {
+  animation-delay: 1.4s;
+}
+@keyframes aw-ring {
+  0% {
+    transform: scale(0.55);
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.6;
+  }
+  100% {
+    transform: scale(1.45);
+    opacity: 0;
+  }
 }
 
 /* ============================================================
