@@ -257,16 +257,28 @@ const canonical = new URL(Astro.url.pathname, SITE.url).href;
         if (!aboutWipe || !aboutDot) return Promise.resolve();
         aboutWipe.classList.add('is-animating');
         if (reduceMotion) return Promise.resolve();
-        // 从点击位置扩散;键盘/后退等没有来源元素时从屏幕中心扩散
+        // 从点击位置扩散;键盘/后退等没有来源元素时从屏幕中心扩散。
+        // 手机端统一从屏幕中心扩散:半径直接减半,图层面积约降到 1/4,
+        // 大圆缩放时更不容易掉帧。
         const rect = source?.getBoundingClientRect();
-        const x = rect ? rect.left + rect.width / 2 : window.innerWidth / 2;
-        const y = rect ? rect.top + rect.height / 2 : window.innerHeight / 2;
-        // 只按“点击点到最远屏幕角”的半径铺圆,别用 220vmax 的超大图层
-        const radius =
-          Math.hypot(
-            Math.max(x, window.innerWidth - x),
-            Math.max(y, window.innerHeight - y),
-          ) + 8;
+        const mobile = window.innerWidth < 768;
+        const x = mobile
+          ? window.innerWidth / 2
+          : rect
+            ? rect.left + rect.width / 2
+            : window.innerWidth / 2;
+        const y = mobile
+          ? window.innerHeight / 2
+          : rect
+            ? rect.top + rect.height / 2
+            : window.innerHeight / 2;
+        // 只按“扩散点到最远屏幕角”的半径铺圆,别用 220vmax 的超大图层
+        const radius = mobile
+          ? Math.hypot(window.innerWidth / 2, window.innerHeight / 2) + 8
+          : Math.hypot(
+              Math.max(x, window.innerWidth - x),
+              Math.max(y, window.innerHeight - y),
+            ) + 8;
         aboutDot.style.width = `${Math.round(radius * 2)}px`;
         aboutDot.style.height = `${Math.round(radius * 2)}px`;
         aboutDot.style.left = `${x}px`;
