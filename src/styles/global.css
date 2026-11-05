@@ -432,6 +432,11 @@ html.js [data-hero] > * {
   }
 }
 
+/* 放在所有 animation 声明之后,避免被 animation 简写重置回 running */
+.about-wipe:not(.is-animating) .about-wipe-deco > * {
+  animation-play-state: paused;
+}
+
 /* ============================================================
    阅读进度条
    ============================================================ */
