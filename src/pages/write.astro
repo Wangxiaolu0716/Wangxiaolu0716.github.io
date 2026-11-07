@@ -921,9 +921,9 @@ import BaseLayout from '../layouts/BaseLayout.astro';
               del.type = 'button';
               del.className =
                 'shrink-0 rounded px-1.5 py-1 text-[11px] text-muted transition-colors hover:text-accent';
-              del.title = '删除草稿';
+              del.title = item.group === 'draft' ? '删除草稿' : '删除小记';
               del.textContent = '删除';
-              del.addEventListener('click', () => void deleteDraft(item));
+              del.addEventListener('click', () => void deleteItem(item));
               row.appendChild(del);
             }
             wrap.appendChild(row);
@@ -931,7 +931,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
           postList.appendChild(wrap);
         };
 
-        renderGroup('已发布', published, true, false);
+        renderGroup('已发布', published, true, mode === 'note');
         renderGroup('定时发布', scheduled, published.length === 0, false);
         renderGroup(
           '草稿',
@@ -941,26 +941,27 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         );
       }
 
-      async function deleteDraft(item: ListItem): Promise<void> {
+      async function deleteItem(item: ListItem): Promise<void> {
         if (!token) {
           setStatus('先保存 GitHub Token', false);
           return;
         }
+        const kind = item.group === 'draft' ? '草稿' : '小记';
         if (
           !confirm(
-            `删除草稿「${item.title || item.name}」？删除后不可恢复。`,
+            `删除${kind}「${item.title || item.name}」？删除后不可恢复。`,
           )
         ) {
           return;
         }
         try {
-          setStatus('正在删除草稿…');
+          setStatus(`正在删除${kind}…`);
           await gh(
             `/repos/${OWNER}/${REPO}/contents/${encodePath(item.path)}`,
             {
               method: 'DELETE',
               body: JSON.stringify({
-                message: `删除草稿: ${item.name}`,
+                message: `删除${kind}: ${item.name}`,
                 sha: item.sha,
                 branch: BRANCH,
               }),
@@ -971,7 +972,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
             resetEditor();
             clearLocalDraft();
           }
-          setStatus('草稿已删除');
+          setStatus(`${kind}已删除`);
           void loadList();
         } catch (e: any) {
           setStatus(`删除失败：${e.message}`, false);
