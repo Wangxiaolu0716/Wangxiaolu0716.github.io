@@ -179,12 +179,21 @@ import BaseLayout from '../layouts/BaseLayout.astro';
               知道了
             </button>
           </div>
+          <div class="mb-4 flex flex-wrap items-center gap-2">
+            <button id="mode-post" type="button" class="btn-ghost text-accent border-accent">
+              写文章
+            </button>
+            <button id="mode-note" type="button" class="btn-ghost">写小记</button>
+            <span id="mode-hint" class="text-xs text-muted">
+              小记没有标题，直接发在「本周折腾」
+            </span>
+          </div>
           <div class="grid gap-4 sm:grid-cols-2">
-            <label class="sm:col-span-2">
+            <label class="sm:col-span-2" data-post-only>
               <span class="wr-label">标题</span>
               <input id="f-title" class="wr-input" placeholder="文章标题" />
             </label>
-            <label>
+            <label data-post-only>
               <span class="wr-label">文件名 / 网址</span>
               <input
                 id="f-slug"
@@ -198,7 +207,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
               <span class="wr-label">发布日期</span>
               <input id="f-date" class="wr-input" type="date" />
             </label>
-            <label class="sm:col-span-2">
+            <label class="sm:col-span-2" data-post-only>
               <span class="wr-label">摘要</span>
               <input
                 id="f-desc"
@@ -206,26 +215,30 @@ import BaseLayout from '../layouts/BaseLayout.astro';
                 placeholder="一句话摘要（列表、RSS、SEO 都用它）"
               />
             </label>
-            <label class="sm:col-span-2">
+            <label class="sm:col-span-2" data-note-only>
+              <span class="wr-label">心情 / 小标签（可选）</span>
+              <input id="f-mood" class="wr-input" placeholder="例如：折腾、踩坑、开心" />
+            </label>
+            <label class="sm:col-span-2" data-post-only>
               <span class="wr-label">定时发布时间（可选，填了再点「定时发布」）</span>
               <input id="f-scheduled" class="wr-input" type="datetime-local" />
             </label>
-            <label>
+            <label data-post-only>
               <span class="wr-label">分类</span>
               <select id="f-category" class="wr-select">
                 <option value="essay">杂谈随笔</option>
                 <option value="tech">技术分享</option>
               </select>
             </label>
-            <label>
+            <label data-post-only>
               <span class="wr-label">标签（逗号分隔）</span>
               <input id="f-tags" class="wr-input" placeholder="随笔, 记录" />
             </label>
-            <label>
+            <label data-post-only>
               <span class="wr-label">系列（可选）</span>
               <input id="f-series" class="wr-input" placeholder="留空即可" />
             </label>
-            <label>
+            <label data-post-only>
               <span class="wr-label">系列序号（可选）</span>
               <input
                 id="f-order"
@@ -364,6 +377,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     const DRAFT_KEY = 'blog-write-local-draft';
     const SITE = 'https://xuhuohua.xyz';
     const BLOG_DIR = 'src/content/blog';
+    const NOTE_DIR = 'src/content/notes';
 
     marked.setOptions({ gfm: true, breaks: false });
 
@@ -484,6 +498,19 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       return lines.join('\n');
     }
 
+    /** 小记的 frontmatter:没有标题/摘要/分类,只有时间、可选心情和草稿标记 */
+    function buildNoteMarkdown(
+      date: string,
+      mood: string,
+      draft: boolean,
+      body: string,
+    ): string {
+      const lines = ['---', `pubDate: ${date}`];
+      if (mood) lines.push(`mood: ${JSON.stringify(mood)}`);
+      lines.push(`draft: ${draft}`, '---', '', body.trimEnd(), '');
+      return lines.join('\n');
+    }
+
     function init(): void {
       const app = document.getElementById('write-app');
       if (!app || app.dataset.ready === '1') return;
@@ -502,6 +529,10 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       const titleEl = $<HTMLInputElement>('f-title');
       const slugEl = $<HTMLInputElement>('f-slug');
       const dateEl = $<HTMLInputElement>('f-date');
+      const moodEl = $<HTMLInputElement>('f-mood');
+      const modePostBtn = $<HTMLButtonElement>('mode-post');
+      const modeNoteBtn = $<HTMLButtonElement>('mode-note');
+      const modeHint = $<HTMLElement>('mode-hint');
       const scheduledEl = $<HTMLInputElement>('f-scheduled');
       const descEl = $<HTMLInputElement>('f-desc');
       const categoryEl = $<HTMLSelectElement>('f-category');
@@ -527,6 +558,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       const localDraftOk = $<HTMLButtonElement>('local-draft-ok');
 
       let token = localStorage.getItem(TOKEN_KEY) ?? '';
+      let mode: 'post' | 'note' = 'post';
       let currentPath = '';
       let currentSha = '';
       let currentUpdated = '';
@@ -557,6 +589,29 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         scheduleBtn.disabled = value;
         publishBtn.disabled = value;
       };
+
+      const activeBtnClass = 'btn-ghost text-accent border-accent';
+
+      /** 切换「写文章 / 写小记」:小记没有标题、摘要、分类等字段 */
+      const applyMode = (next: 'post' | 'note'): void => {
+        mode = next;
+        const isPost = next === 'post';
+        document
+          .querySelectorAll<HTMLElement>('[data-post-only]')
+          .forEach((el) => el.classList.toggle('hidden', !isPost));
+        document
+          .querySelectorAll<HTMLElement>('[data-note-only]')
+          .forEach((el) => el.classList.toggle('hidden', isPost));
+        modePostBtn.className = isPost ? activeBtnClass : 'btn-ghost';
+        modeNoteBtn.className = isPost ? 'btn-ghost' : activeBtnClass;
+        modeHint.textContent = isPost
+          ? '文章会出现在「博客」列表里，需要标题和摘要'
+          : '小记没有标题，直接发在「本周折腾」';
+        scheduleBtn.style.display = isPost ? '' : 'none';
+        stateBadge.textContent = isPost ? '新文章' : '新小记';
+      };
+
+      const dirOf = (): string => (mode === 'note' ? NOTE_DIR : BLOG_DIR);
 
       let dirty = false;
 
@@ -599,9 +654,11 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       };
 
       const editorSnapshot = () => ({
+        mode,
         title: titleEl.value,
         slug: slugEl.value,
         date: dateEl.value,
+        mood: moodEl.value,
         scheduled: scheduledEl.value,
         desc: descEl.value,
         category: categoryEl.value,
@@ -663,9 +720,11 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         try {
           const d = JSON.parse(raw) as Record<string, any>;
           if (!d || (!d.title && !d.desc && !d.body)) return false;
+          applyMode(d.mode === 'note' ? 'note' : 'post');
           titleEl.value = d.title ?? '';
           slugEl.value = d.slug || `post-${timeStamp()}`;
           dateEl.value = d.date || today();
+          moodEl.value = d.mood ?? '';
           scheduledEl.value = d.scheduled ?? '';
           descEl.value = d.desc ?? '';
           categoryEl.value = d.category === 'tech' ? 'tech' : 'essay';
@@ -770,12 +829,18 @@ import BaseLayout from '../layouts/BaseLayout.astro';
           const raw = base64ToText(data.content);
           const { meta } = parseFrontmatter(raw);
           const pub = parsePubDate(String(meta.pubDate ?? ''));
+          const isNote = String(file.path).startsWith(NOTE_DIR);
           const future =
-            !meta.draft && pub !== null && pub.getTime() > Date.now();
+            !isNote &&
+            !meta.draft &&
+            pub !== null &&
+            pub.getTime() > Date.now();
           return {
             path: file.path,
             name: file.name,
-            title: meta.title || file.name.replace(/\.md$/, ''),
+            title: isNote
+              ? `${pub ? fmtTime(pub) : file.name}${meta.mood ? ` · ${meta.mood}` : ''}`
+              : meta.title || file.name.replace(/\.md$/, ''),
             sha: data.sha,
             raw,
             meta,
@@ -791,7 +856,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         if (!items.length) {
           const empty = document.createElement('p');
           empty.className = 'text-xs text-muted';
-          empty.textContent = '还没有文章。';
+          empty.textContent = mode === 'note' ? '还没有小记。' : '还没有文章。';
           postList.appendChild(empty);
           return;
         }
@@ -930,7 +995,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         const requestId = ++listRequestId;
         try {
           const files = await gh(
-            `/repos/${OWNER}/${REPO}/contents/${BLOG_DIR}?ref=${BRANCH}`,
+            `/repos/${OWNER}/${REPO}/contents/${dirOf()}?ref=${BRANCH}`,
           );
           const listFiles = (Array.isArray(files) ? files : []).filter(
             (f: any) =>
@@ -974,8 +1039,14 @@ import BaseLayout from '../layouts/BaseLayout.astro';
           const parsed = parseFrontmatter(raw);
           const meta = parsed.meta;
           const pub = parsePubDate(String(meta.pubDate ?? ''));
+          const isNote = path.startsWith(NOTE_DIR);
+          if (isNote) applyMode('note');
+          else applyMode('post');
           const future =
-            !meta.draft && pub !== null && pub.getTime() > Date.now();
+            !isNote &&
+            !meta.draft &&
+            pub !== null &&
+            pub.getTime() > Date.now();
           titleEl.value = meta.title ?? '';
           slugEl.value = (path.split('/').pop() ?? '').replace(/\.md$/, '');
           dateEl.value = pub
@@ -984,6 +1055,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
           scheduledEl.value =
             future && pub ? toLocalInput(pub) : '';
           descEl.value = meta.description ?? '';
+          moodEl.value = meta.mood ?? '';
           categoryEl.value = meta.category === 'tech' ? 'tech' : 'essay';
           tagsEl.value = Array.isArray(meta.tags) ? meta.tags.join(', ') : '';
           seriesEl.value = meta.series ?? '';
@@ -1026,17 +1098,24 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         slugTouched = false;
         dirty = false;
         titleEl.value = '';
-        slugEl.value = `post-${timeStamp()}`;
         dateEl.value = today();
+        moodEl.value = '';
         scheduledEl.value = '';
         descEl.value = '';
         categoryEl.value = 'essay';
         tagsEl.value = '';
         seriesEl.value = '';
         orderEl.value = '';
-        bodyEl.value = '## 背景\n\n\n## 正文\n\n\n## 总结\n';
-        stateBadge.textContent = '新文章';
         resultLinks.innerHTML = '';
+        if (mode === 'note') {
+          slugEl.value = '';
+          bodyEl.value = '';
+          stateBadge.textContent = '新小记';
+        } else {
+          slugEl.value = `post-${timeStamp()}`;
+          bodyEl.value = '## 背景\n\n\n## 正文\n\n\n## 总结\n';
+          stateBadge.textContent = '新文章';
+        }
       }
 
       function collect(): PostDraft | null {
@@ -1077,18 +1156,113 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         };
       }
 
-      async function save(
-        mode: 'draft' | 'publish' | 'schedule',
+      /** 保存小记:没有标题/摘要,文件名按日期自动生成 */
+      async function saveNote(
+        mode_: 'draft' | 'publish' | 'schedule',
       ): Promise<void> {
         if (busy) return;
         if (!token) {
           setStatus('先保存 GitHub Token', false);
           return;
         }
+        const date = dateEl.value;
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+          setStatus('发布日期格式不对', false);
+          return;
+        }
+        const body = bodyEl.value.trim();
+        if (!body) {
+          setStatus('小记内容不能为空', false);
+          return;
+        }
+        const draft = mode_ !== 'publish';
+        setBusy(true);
+        setStatus(draft ? '正在存草稿…' : '正在发布…');
+        try {
+          let finalPath = currentPath;
+          let sha = currentPath ? currentSha : '';
+          if (!finalPath) {
+            const candidate = `${NOTE_DIR}/${date}.md`;
+            try {
+              await gh(
+                `/repos/${OWNER}/${REPO}/contents/${encodePath(candidate)}?ref=${BRANCH}`,
+              );
+              // 同一天已经有一篇小记,加时间后缀,避免覆盖
+              const hhmm = timeStamp().slice(9);
+              finalPath = `${NOTE_DIR}/${date}-${hhmm}.md`;
+            } catch (e: any) {
+              if (e.status !== 404) throw e;
+              finalPath = candidate;
+            }
+          }
+          const payload: any = {
+            message: `${draft ? '保存小记草稿' : '发布小记'}: ${date}`,
+            content: textToBase64(
+              buildNoteMarkdown(date, moodEl.value.trim(), draft, body),
+            ),
+            branch: BRANCH,
+          };
+          if (sha) payload.sha = sha;
+          const res = await gh(
+            `/repos/${OWNER}/${REPO}/contents/${encodePath(finalPath)}`,
+            { method: 'PUT', body: JSON.stringify(payload) },
+          );
+          currentPath = finalPath;
+          currentSha = res.content.sha;
+          currentPubDate = date;
+          clearLocalDraft();
+          stateBadge.textContent = draft ? '草稿（未发布）' : '已发布';
+          resultLinks.innerHTML = '';
+          const ghLink = document.createElement('a');
+          ghLink.href = `https://github.com/${OWNER}/${REPO}/blob/${BRANCH}/${finalPath}`;
+          ghLink.target = '_blank';
+          ghLink.rel = 'noopener';
+          ghLink.className = 'text-accent hover:underline';
+          ghLink.textContent = '在 GitHub 查看 ↗';
+          resultLinks.append(ghLink);
+          if (draft) {
+            const hint = document.createElement('span');
+            hint.className = 'text-muted';
+            hint.textContent = '草稿已保存，网站上不会显示';
+            resultLinks.append(hint);
+          } else {
+            const siteLink = document.createElement('a');
+            siteLink.href = `${SITE}/notes/`;
+            siteLink.target = '_blank';
+            siteLink.rel = 'noopener';
+            siteLink.className = 'text-accent hover:underline';
+            siteLink.textContent = '打开「本周折腾」（约 2 分钟后生效）↗';
+            resultLinks.append(siteLink);
+          }
+          setStatus(draft ? '小记草稿已保存' : '已发布，等待自动部署');
+          void loadList();
+        } catch (e: any) {
+          setStatus(`保存失败：${e.message}`, false);
+        } finally {
+          setBusy(false);
+        }
+      }
+
+      async function save(
+        action: 'draft' | 'publish' | 'schedule',
+      ): Promise<void> {
+        if (busy) return;
+        if (mode === 'note') {
+          if (action === 'schedule') {
+            setStatus('小记不支持定时发布，请直接发布', false);
+            return;
+          }
+          await saveNote(action);
+          return;
+        }
+        if (!token) {
+          setStatus('先保存 GitHub Token', false);
+          return;
+        }
         const post = collect();
         if (!post) return;
-        const publishing = mode === 'publish';
-        const scheduling = mode === 'schedule';
+        const publishing = action === 'publish';
+        const scheduling = action === 'schedule';
         if (scheduling) {
           if (!scheduledEl.value) {
             setStatus('先填「定时发布时间」', false);
@@ -1454,6 +1628,20 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 
       refreshBtn.addEventListener('click', () => void loadList());
       newBtn.addEventListener('click', newPost);
+
+      const switchMode = (next: 'post' | 'note'): void => {
+        if (mode === next) return;
+        if (dirty && !confirm('切换会清空当前编辑的内容，确定吗？')) return;
+        applyMode(next);
+        resetEditor();
+        clearLocalDraft();
+        newBtn.textContent = next === 'note' ? '+ 新建小记' : '+ 新建文章';
+        setStatus(next === 'note' ? '已切到写小记' : '已切到写文章');
+        if (token) void loadList();
+      };
+      modePostBtn.addEventListener('click', () => switchMode('post'));
+      modeNoteBtn.addEventListener('click', () => switchMode('note'));
+
       saveDraftBtn.addEventListener('click', () => void save('draft'));
       scheduleBtn.addEventListener('click', () => void save('schedule'));
       publishBtn.addEventListener('click', () => void save('publish'));
@@ -1518,6 +1706,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       });
 
       // ===== 初始化 =====
+      applyMode('post');
       resetEditor();
       const restored = restoreLocalDraft();
       setStatus(restored ? '已恢复上次未保存的内容' : '已新建，可以开始写');
