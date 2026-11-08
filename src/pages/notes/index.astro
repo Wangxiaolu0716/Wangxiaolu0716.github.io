@@ -1,13 +1,15 @@
 ---
 import { getCollection, render } from 'astro:content';
 import BaseLayout from '../../layouts/BaseLayout.astro';
-import { sortPostsDesc } from '../../utils/posts';
+import { contentHidden, sortPostsDesc } from '../../utils/posts';
 import type { CollectionEntry } from 'astro:content';
 
 type Note = CollectionEntry<'notes'>;
-const notes = (
-  await getCollection('notes', ({ data }) => !data.draft)
-).sort((a: Note, b: Note) => b.data.pubDate.getTime() - a.data.pubDate.getTime());
+const notes = contentHidden
+  ? []
+  : (await getCollection('notes', ({ data }) => !data.draft)).sort(
+      (a: Note, b: Note) => b.data.pubDate.getTime() - a.data.pubDate.getTime(),
+    );
 
 const rendered = await Promise.all(
   notes.map(async (note) => ({ note, Content: (await render(note)).Content })),
@@ -25,6 +27,11 @@ const rendered = await Promise.all(
     </div>
 
     <div class="mt-12 space-y-10">
+      {contentHidden && (
+        <p class="rounded-2xl border border-border bg-surface p-6 text-sm text-muted">
+          内容暂时隐藏了，稍后再来看看。
+        </p>
+      )}
       {
         rendered.map(({ note, Content }) => (
           <article

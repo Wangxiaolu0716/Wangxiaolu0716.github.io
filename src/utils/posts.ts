@@ -1,6 +1,12 @@
 import type { CollectionEntry } from 'astro:content';
+import siteState from '../data/site-state.json';
 
 export type Post = CollectionEntry<'blog'>;
+
+/** 一键隐藏开关:置为 true 时,文章与小记全部从站点消失(约 1 分钟生效) */
+export const contentHidden = Boolean(
+  (siteState as { contentHidden?: boolean }).contentHidden,
+);
 
 /**
  * base 路径处理:GitHub Pages 项目站点部署在 /blog/ 子路径下,
@@ -18,9 +24,11 @@ export const sortPostsDesc = (posts: Post[]): Post[] =>
     (a, b) => b.data.pubDate.getTime() - a.data.pubDate.getTime(),
   );
 
-/** 已发布:不是草稿,且已到发布时间(定时文章到点后才会生成) */
+/** 已发布:不是草稿,且已到发布时间(定时文章到点后才会生成);隐藏状态下全部视为不可见 */
 export const isPublished = (post: Post): boolean =>
-  !post.data.draft && post.data.pubDate.getTime() <= Date.now();
+  !contentHidden &&
+  !post.data.draft &&
+  post.data.pubDate.getTime() <= Date.now();
 
 /** 板块定义:key 对应 frontmatter 的 category 字段 */
 export const CATEGORIES = [

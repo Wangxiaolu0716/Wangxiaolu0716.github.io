@@ -6,16 +6,18 @@ import PostCard from '../components/PostCard.astro';
 import TagPill from '../components/TagPill.astro';
 import Timeline from '../components/Timeline.astro';
 import { SITE } from '../config';
-import { getAllTags, isPublished, sortPostsDesc, withBase } from '../utils/posts';
+import { contentHidden, getAllTags, isPublished, sortPostsDesc, withBase } from '../utils/posts';
 
 const posts = sortPostsDesc(
   await getCollection('blog', (post) => isPublished(post)),
 );
 const latest = posts.slice(0, 4);
 const tags = getAllTags(posts);
-const latestNotes = sortPostsDesc(
-  await getCollection('notes', ({ data }) => !data.draft),
-).slice(0, 3);
+const latestNotes = contentHidden
+  ? []
+  : sortPostsDesc(
+      await getCollection('notes', ({ data }) => !data.draft),
+    ).slice(0, 3);
 
 /** 去掉 Markdown 符号,取纯文本摘要 */
 const plainText = (s: string, n = 90): string =>
@@ -116,6 +118,11 @@ const jsonLd = [
   </section>
 
   <section class="mx-auto max-w-5xl px-5 pb-24">
+    {contentHidden && (
+      <p class="rounded-2xl border border-border bg-surface p-6 text-sm text-muted">
+        内容暂时隐藏了，稍后再来看看。
+      </p>
+    )}
     <div class="flex items-end justify-between" data-reveal>
       <h2 class="text-2xl font-bold">最新文章</h2>
       <a
