@@ -1,7 +1,7 @@
 ---
 import { getCollection } from 'astro:content';
 import BaseLayout from '../layouts/BaseLayout.astro';
-import { categoryLabel, formatDate, isPublished } from '../utils/posts';
+import { categoryLabel, formatDateTime, isPublished } from '../utils/posts';
 import type { Post } from '../utils/posts';
 
 const posts = await getCollection(
@@ -60,7 +60,7 @@ const series = [...groups.entries()]
                         {post.data.title}
                       </span>
                       <span class="mt-0.5 block font-mono text-xs text-muted">
-                        {formatDate(post.data.pubDate)} · {categoryLabel(post.data.category)}
+                        {formatDateTime(post.data.pubDate)} · {categoryLabel(post.data.category)}
                       </span>
                     </span>
                     <span class="hidden text-muted transition-transform group-hover:translate-x-1 sm:block">

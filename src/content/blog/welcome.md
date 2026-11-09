@@ -1,7 +1,7 @@
 ---
 title: 博客开张：从这里开始记录
 description: 人生三大主线——身体健康、提高认知、陪伴家人。
-pubDate: 2026-11-04
+pubDate: 2026-11-04T00:00:00+08:00
 category: essay
 tags: [随笔, 开始]
 draft: false

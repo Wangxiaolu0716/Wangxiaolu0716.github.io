@@ -74,13 +74,25 @@ export const readingMinutes = (body?: string): number => {
   return Math.max(1, Math.round(chars / 400));
 };
 
-/** 中文日期格式:2026 年 10 月 30 日 */
+/** 中文日期格式:2026 年 10 月 30 日(统一按东八区,构建机通常是 UTC) */
 export const formatDate = (date: Date): string =>
   date.toLocaleDateString('zh-CN', {
+    timeZone: 'Asia/Shanghai',
     year: 'numeric',
     month: 'long',
     day: 'numeric',
   });
+
+/** 文章时间:日期 + 东八区时分;没有具体时间的(零点)只显示日期 */
+export const formatDateTime = (date: Date): string => {
+  const hm = date.toLocaleTimeString('zh-CN', {
+    timeZone: 'Asia/Shanghai',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+  return hm === '00:00' ? formatDate(date) : `${formatDate(date)} ${hm}`;
+};
 
 /** 小记时间:按东八区显示,有时间带时分;整点零分的纯日期只显示日期 */
 export const formatNoteTime = (date: Date): string => {

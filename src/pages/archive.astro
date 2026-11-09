@@ -1,7 +1,7 @@
 ---
 import { getCollection } from 'astro:content';
 import BaseLayout from '../layouts/BaseLayout.astro';
-import { formatDate, groupByYear, isPublished, withBase } from '../utils/posts';
+import { formatDateTime, groupByYear, isPublished, withBase } from '../utils/posts';
 
 const posts = await getCollection('blog', (post) => isPublished(post));
 const groups = groupByYear(posts);
@@ -33,7 +33,7 @@ const groups = groupByYear(posts);
                     datetime={post.data.pubDate.toISOString()}
                     class="font-mono text-xs text-muted"
                   >
-                    {formatDate(post.data.pubDate)}
+                    {formatDateTime(post.data.pubDate)}
                   </time>
                   <span class="font-medium transition-colors group-hover:text-accent">
                     {post.data.title}

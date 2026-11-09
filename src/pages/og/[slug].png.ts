@@ -3,7 +3,7 @@ import { getCollection } from 'astro:content';
 import fs from 'node:fs';
 import path from 'node:path';
 import sharp from 'sharp';
-import { isPublished } from '../../utils/posts';
+import { formatDate, isPublished } from '../../utils/posts';
 
 // 每篇文章自动生成 OG 分享图(1200×630)。
 // 依赖中文字体 .fonts/NotoSansSC.otf(CI 里由 workflow 缓存下载);
@@ -35,7 +35,7 @@ export async function GET({ props }: { props: { post: any } }) {
   }
 
   const title: string = post.data.title;
-  const date: string = post.data.pubDate.toLocaleDateString('zh-CN');
+  const date: string = formatDate(post.data.pubDate);
   const tags: string[] = post.data.tags ?? [];
 
   const fontData = fs.readFileSync(FONT_PATH);
