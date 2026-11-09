@@ -10,6 +10,7 @@ import Giscus from '../../components/Giscus.astro';
 import { BASE, categoryLabel, isPublished, readingMinutes, sortPostsDesc, withBase } from '../../utils/posts';
 import { SITE } from '../../config';
 import PostTools from '../../components/PostTools.astro';
+import ShareCard from '../../components/ShareCard.astro';
 
 
 export async function getStaticPaths() {
@@ -34,6 +35,8 @@ const next = index > 0 ? sorted[index - 1] : undefined;
 
 // 每篇文章的专属 OG 分享图(构建时由 satori 生成)
 const ogImage = new URL(`${BASE}og/${post.id}.png`, SITE.url).href;
+// 竖版分享卡(含二维码),构建时生成;用站内相对路径,本地预览也能显示
+const shareImage = `${BASE}share/${post.id}.png`;
 
 // 结构化数据(SEO/GEO):文章 + 面包屑
 const publishedISO = post.data.pubDate.toISOString();
@@ -114,6 +117,12 @@ const jsonLd = [
         <FormattedDate date={post.data.pubDate} />
         <span aria-hidden="true">·</span>
         <span>约 {readingMinutes(post.body)} 分钟</span>
+        <ShareCard
+          title={post.data.title}
+          url={pageUrl}
+          image={shareImage}
+          slug={post.id}
+        />
         {
           post.data.updatedDate && (
             <>

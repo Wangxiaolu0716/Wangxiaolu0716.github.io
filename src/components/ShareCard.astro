@@ -1,0 +1,179 @@
+---
+interface Props {
+  /** 文章标题 */
+  title: string;
+  /** 文章完整网址(复制/二维码用) */
+  url: string;
+  /** 分享卡图片地址 */
+  image: string;
+  /** 文章 id,用于下载文件名 */
+  slug: string;
+}
+
+const { title, url, image, slug } = Astro.props;
+---
+
+<button
+  type="button"
+  data-share-open
+  class="btn-ghost inline-flex items-center gap-1.5"
+  aria-haspopup="dialog"
+>
+  <svg
+    width="15"
+    height="15"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    aria-hidden="true"
+  >
+    <circle cx="18" cy="5" r="3"></circle>
+    <circle cx="6" cy="12" r="3"></circle>
+    <circle cx="18" cy="19" r="3"></circle>
+    <path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"></path>
+  </svg>
+  分享
+</button>
+
+<dialog id="share-dialog" class="share-dialog" aria-label="分享这篇文章">
+  <div class="share-panel">
+    <div class="share-head">
+      <span class="label-mono text-accent">// share</span>
+      <button
+        type="button"
+        data-share-close
+        class="icon-btn"
+        aria-label="关闭分享"
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <path d="M18 6 6 18M6 6l12 12"></path>
+        </svg>
+      </button>
+    </div>
+
+    <p class="share-title">{title}</p>
+
+    <img
+      src={image}
+      alt={`${title} 的分享图`}
+      class="share-img"
+      loading="lazy"
+      decoding="async"
+    />
+
+    <p class="share-hint">手机长按图片保存，发出去别人扫码就能读；也可以直接复制链接。</p>
+
+    <div class="share-actions">
+      <a
+        href={image}
+        download={`share-${slug}.png`}
+        class="btn-primary justify-center"
+      >
+        保存分享图
+      </a>
+      <button type="button" data-share-copy data-url={url} class="btn-ghost justify-center">
+        复制链接
+      </button>
+    </div>
+  </div>
+</dialog>
+
+<style>
+  .share-dialog {
+    border: none;
+    padding: 0;
+    background: transparent;
+    width: min(92vw, 430px);
+    max-width: min(92vw, 430px);
+  }
+  .share-dialog::backdrop {
+    background: rgba(18, 12, 28, 0.62);
+    backdrop-filter: blur(6px);
+  }
+  .share-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 1rem;
+    background: var(--surface);
+    padding: 1rem;
+    max-height: 88vh;
+    overflow: auto;
+  }
+  .share-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .share-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    line-height: 1.45;
+  }
+  .share-img {
+    width: 100%;
+    border-radius: 0.75rem;
+    border: 1px solid var(--border);
+    display: block;
+  }
+  .share-hint {
+    font-size: 0.75rem;
+    line-height: 1.6;
+    color: var(--muted);
+  }
+  .share-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+  }
+</style>
+
+<script>
+  const getDialog = (): HTMLDialogElement | null =>
+    document.getElementById('share-dialog') as HTMLDialogElement | null;
+
+  document.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement;
+
+    if (target.closest('[data-share-open]')) {
+      const dialog = getDialog();
+      if (dialog && !dialog.open) dialog.showModal();
+      return;
+    }
+
+    if (target.closest('[data-share-close]')) {
+      getDialog()?.close();
+      return;
+    }
+
+    const copyBtn = target.closest('[data-share-copy]') as HTMLButtonElement | null;
+    if (copyBtn) {
+      const url = copyBtn.dataset.url || location.href;
+      const done = () => {
+        copyBtn.textContent = '已复制';
+        setTimeout(() => {
+          copyBtn.textContent = '复制链接';
+        }, 1600);
+      };
+      if (navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(url).then(done).catch(done);
+      } else {
+        done();
+      }
+    }
+  });
+
+  // 点遮罩关闭
+  document.addEventListener('click', (event) => {
+    const dialog = getDialog();
+    if (dialog?.open && event.target === dialog) dialog.close();
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') getDialog()?.close();
+  });
+</script>
