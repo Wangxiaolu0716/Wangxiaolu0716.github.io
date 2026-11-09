@@ -6,7 +6,7 @@ import PostCard from '../components/PostCard.astro';
 import TagPill from '../components/TagPill.astro';
 import Timeline from '../components/Timeline.astro';
 import { SITE } from '../config';
-import { contentHidden, getAllTags, isPublished, sortPostsDesc, withBase } from '../utils/posts';
+import { contentHidden, formatNoteTime, getAllTags, isPublished, sortPostsDesc, withBase } from '../utils/posts';
 
 const posts = sortPostsDesc(
   await getCollection('blog', (post) => isPublished(post)),
@@ -160,7 +160,7 @@ const jsonLd = [
                     datetime={note.data.pubDate.toISOString()}
                     class="label-mono text-muted"
                   >
-                    {note.data.pubDate.toLocaleDateString('zh-CN')}
+                    {formatNoteTime(note.data.pubDate)}
                   </time>
                   {note.data.mood && (
                     <span class="text-xs text-accent">{note.data.mood}</span>

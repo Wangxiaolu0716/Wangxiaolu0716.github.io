@@ -1,7 +1,7 @@
 ---
 import { getCollection, render } from 'astro:content';
 import BaseLayout from '../../layouts/BaseLayout.astro';
-import { contentHidden, sortPostsDesc } from '../../utils/posts';
+import { contentHidden, formatNoteTime } from '../../utils/posts';
 import type { CollectionEntry } from 'astro:content';
 
 type Note = CollectionEntry<'notes'>;
@@ -43,7 +43,7 @@ const rendered = await Promise.all(
                 datetime={note.data.pubDate.toISOString()}
                 class="label-mono text-muted"
               >
-                {note.data.pubDate.toLocaleDateString('zh-CN')}
+                {formatNoteTime(note.data.pubDate)}
               </time>
               {note.data.mood && (
                 <span class="text-sm text-accent">{note.data.mood}</span>

@@ -81,3 +81,20 @@ export const formatDate = (date: Date): string =>
     month: 'long',
     day: 'numeric',
   });
+
+/** 小记时间:按东八区显示,有时间带时分;整点零分的纯日期只显示日期 */
+export const formatNoteTime = (date: Date): string => {
+  const day = date.toLocaleDateString('zh-CN', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+  });
+  const hm = date.toLocaleTimeString('zh-CN', {
+    timeZone: 'Asia/Shanghai',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+  return hm === '00:00' ? day : `${day} ${hm}`;
+};

@@ -47,7 +47,7 @@ const blog = defineCollection({
 const notes = defineCollection({
   loader: glob({ pattern: '**/[^_]*.md', base: './src/content/notes' }),
   schema: z.object({
-    pubDate: z.coerce.date(),
+    pubDate: pubDateSchema,
     /** 心情/标签小字(可选) */
     mood: z.string().optional(),
     draft: z.boolean().default(false),
