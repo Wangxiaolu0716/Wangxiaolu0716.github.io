@@ -921,7 +921,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
               del.type = 'button';
               del.className =
                 'shrink-0 rounded px-1.5 py-1 text-[11px] text-muted transition-colors hover:text-accent';
-              del.title = item.group === 'draft' ? '删除草稿' : '删除小记';
+              del.title = `删除${kindOf(item)}`;
               del.textContent = '删除';
               del.addEventListener('click', () => void deleteItem(item));
               row.appendChild(del);
@@ -931,8 +931,8 @@ import BaseLayout from '../layouts/BaseLayout.astro';
           postList.appendChild(wrap);
         };
 
-        renderGroup('已发布', published, true, mode === 'note');
-        renderGroup('定时发布', scheduled, published.length === 0, false);
+        renderGroup('已发布', published, true, true);
+        renderGroup('定时发布', scheduled, published.length === 0, true);
         renderGroup(
           '草稿',
           drafts,
@@ -941,12 +941,20 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         );
       }
 
+      /** 列表项类型:草稿 / 文章 / 小记,用于删除时的文案 */
+      const kindOf = (item: ListItem): string =>
+        item.group === 'draft'
+          ? '草稿'
+          : item.path.startsWith(NOTE_DIR)
+            ? '小记'
+            : '文章';
+
       async function deleteItem(item: ListItem): Promise<void> {
         if (!token) {
           setStatus('先保存 GitHub Token', false);
           return;
         }
-        const kind = item.group === 'draft' ? '草稿' : '小记';
+        const kind = kindOf(item);
         if (
           !confirm(
             `删除${kind}「${item.title || item.name}」？删除后不可恢复。`,
